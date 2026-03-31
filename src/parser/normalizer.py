@@ -64,7 +64,7 @@ class ASTNormalizer:
             metadata['name'] = self.var_map[var_name]
         
         # 标准化函数名
-        elif node.type == 'FunctionDef' and 'name' in metadata:
+        if node.type == 'FunctionDef' and 'name' in metadata:
             func_name = metadata['name']
             if func_name not in self.var_map:
                 self.var_map[func_name] = f'f{self.var_counter}'
