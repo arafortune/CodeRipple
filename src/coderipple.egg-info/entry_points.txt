@@ -1,0 +1,2 @@
+[console_scripts]
+coderipple = src.cli.main:cli
