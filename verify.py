@@ -16,6 +16,13 @@ def test_imports():
         from src.core.tracer import BugTracer
         from src.core.result import TraceResult
         from src.core.strategies.commit_chain import CommitChainStrategy
+        from src.core.strategies.code_block import CodeBlockStrategy
+        from src.core.strategies.ast_structure import ASTStructureStrategy
+        from src.core.strategies.similarity import SimilarityStrategy
+        from src.parser.ast import ASTParser
+        from src.parser.normalizer import ASTNormalizer
+        from src.parser.features import FeatureExtractor
+        from src.parser.similarity import SimilarityCalculator
         print("✓ 所有模块导入成功")
         return True
     except Exception as e:
@@ -49,6 +56,32 @@ def test_result():
         print(f"✗ 结果测试失败: {e}")
         return False
 
+def test_parser():
+    """测试解析器"""
+    print("\n测试解析器...")
+    try:
+        from src.parser.ast import ASTParser
+        from src.parser.normalizer import ASTNormalizer
+        from src.parser.features import FeatureExtractor
+        
+        parser = ASTParser('python')
+        ast = parser.parse("def func(): return 1")
+        assert ast is not None
+        
+        normalizer = ASTNormalizer()
+        normalized = normalizer.normalize(ast)
+        assert normalized.fingerprint is not None
+        
+        extractor = FeatureExtractor('python')
+        features = extractor.extract("def func(): return 1")
+        assert len(features.tokens) > 0
+        
+        print("✓ 解析器测试通过")
+        return True
+    except Exception as e:
+        print(f"✗ 解析器测试失败: {e}")
+        return False
+
 def main():
     """主函数"""
     print("=" * 50)
@@ -59,6 +92,7 @@ def main():
     results.append(test_imports())
     results.append(test_config())
     results.append(test_result())
+    results.append(test_parser())
     
     print("\n" + "=" * 50)
     if all(results):
