@@ -20,16 +20,32 @@ def cli():
 @cli.command()
 @click.argument('fix_commit')
 @click.argument('target')
-@click.option('--repo', '-r', default='.', help='仓库路径')
-@click.option('--config', '-c', default='config/coderipple.yaml', help='配置文件')
-@click.option('--output', '-o', default='table', type=click.Choice(['table', 'json']), help='输出格式')
+@click.option('--repo', '-r', default='.')
+@click.option('--config', '-c', default='config/coderipple.yaml')
+@click.option('--output', '-o', default='table', type=click.Choice(['table', 'json']))
 def trace(fix_commit, target, repo, config, output):
     """
     追溯bug是否影响目标版本
     
+    FIX_COMMIT: 修复bug的commit SHA
+    
+    TARGET: 目标分支或tag
+    
+    REPO: Git仓库路径（默认当前目录）
+    
+    CONFIG: 配置文件路径
+    
+    OUTPUT: 输出格式（table或json）
+    
     示例:
+        # 在当前仓库中追溯
         coderipple trace abc123 v1.0.0
-        coderipple trace abc123 commercial:release/v1.0
+        
+        # 在指定仓库中追溯
+        coderipple trace abc123 v1.0.0 --repo /path/to/repo
+        
+        # 输出JSON格式
+        coderipple trace abc123 v1.0.0 --output json
     """
     try:
         config_obj = Config.from_file(config)
