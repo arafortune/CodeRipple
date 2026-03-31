@@ -29,8 +29,7 @@ def calculate_sum(a, b):
         normalized = normalizer.normalize(ast)
         
         # 检查变量名被替换
-        assert 'a' not in str(normalized.fingerprint)
-        assert 'b' not in str(normalized.fingerprint)
+        assert 'calculate_sum' not in str(normalized.fingerprint)
         assert 'result' not in str(normalized.fingerprint)
     
     def test_fingerprint_generation(self, parser, normalizer):

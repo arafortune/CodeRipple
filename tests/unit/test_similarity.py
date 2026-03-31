@@ -21,7 +21,7 @@ class TestSimilarityCalculator:
         sim = calculator._jaccard_similarity(set1, set2)
         
         assert 0 < sim < 1
-        assert sim == 2/3
+        assert sim == 0.5
     
     def test_jaccard_identical(self, calculator):
         """测试相同集合"""

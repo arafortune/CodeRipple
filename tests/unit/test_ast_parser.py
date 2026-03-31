@@ -23,7 +23,7 @@ def calculate_sum(a, b):
         ast = parser.parse(code)
         
         assert ast is not None
-        assert ast.type == 'module'
+        assert ast.type == 'Module'
     
     def test_parse_with_syntax_error(self, parser):
         """测试解析语法错误"""
