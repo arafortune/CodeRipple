@@ -13,7 +13,7 @@ from pathlib import Path
 def test_repo():
     """创建测试仓库"""
     tmp_path = Path(tempfile.mkdtemp())
-    repo = git.Repo.init(tmp_path)
+    repo = git.Repo.init(tmp_path, initial_branch="master")
     
     readme = tmp_path / "README.md"
     readme.write_text("# Test Repo")

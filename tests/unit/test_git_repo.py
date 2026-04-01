@@ -63,9 +63,9 @@ class TestGitRepository:
         """测试文件内容缓存"""
         repo = GitRepository(test_repo)
         commit = repo.get_commit("HEAD")
-        
+
         content1 = repo.get_file_content(commit, "README.md")
         content2 = repo.get_file_content(commit, "README.md")
-        
+
         assert content1 == content2
-        assert "HEAD:README.md" in repo._file_cache
+        assert f"{commit.hexsha}:README.md" in repo._file_cache
