@@ -33,3 +33,4 @@ class TestCLI:
         assert result.exit_code == 0
         assert 'fix_commit' in result.output
         assert 'target' in result.output
+        assert '--target-repo' in result.output
