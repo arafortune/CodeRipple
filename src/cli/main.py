@@ -22,16 +22,17 @@ def cli():
 @click.argument("fix_commit", metavar="fix_commit")
 @click.argument("target", metavar="target")
 @click.option("--repo", "-r", default=".")
+@click.option("--target-repo", "-t", default=None)
 @click.option("--config", "-c", default="config/coderipple.yaml")
 @click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]))
-def trace(fix_commit, target, repo, config, output):
+def trace(fix_commit, target, repo, target_repo, config, output):
     """追溯bug是否影响目标版本"""
     try:
         config_obj = Config.from_file(config)
         tracer = BugTracer(config_obj, repo)
 
-        target_repo = GitRepository(repo)
-        result = tracer.trace(fix_commit, target_repo, target)
+        resolved_target_repo = GitRepository(target_repo or repo)
+        result = tracer.trace(fix_commit, resolved_target_repo, target)
 
         if output == "json":
             click.echo(
