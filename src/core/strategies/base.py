@@ -3,30 +3,30 @@
 """
 
 from abc import ABC, abstractmethod
-from core.result import TraceResult
-from git.repo import GitRepository
+
+from src.core.result import TraceResult
+from src.git.repo import GitRepository
 
 
 class TraceStrategy(ABC):
     """追溯策略抽象基类"""
-    
+
     def __init__(self, repo: GitRepository):
         self.repo = repo
-    
+
     @abstractmethod
-    def trace(self, fix_commit: str, target_repo: GitRepository, 
-              target_ref: str) -> TraceResult:
+    def trace(self, fix_commit: str, target_repo: GitRepository, target_ref: str) -> TraceResult:
         """执行追溯"""
-        pass
-    
+        raise NotImplementedError
+
     @property
     @abstractmethod
     def priority(self) -> int:
         """策略优先级"""
-        pass
-    
+        raise NotImplementedError
+
     @property
     @abstractmethod
     def confidence(self) -> float:
         """策略置信度"""
-        pass
+        raise NotImplementedError
