@@ -20,7 +20,7 @@ dev = [
 ]
 
 [project.scripts]
-coderipple = "cli.main:cli"
+coderipple = "src.cli.main:cli"
 
 [build-system]
 requires = ["setuptools>=45", "wheel"]
@@ -34,3 +34,4 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
+pythonpath = ["."]
