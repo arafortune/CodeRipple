@@ -2,19 +2,19 @@
 Bug追溯器
 """
 
-from src.core.result import TraceResult
-from src.core.strategies.commit_chain import CommitChainStrategy
-from src.core.strategies.code_block import CodeBlockStrategy
-from src.core.strategies.ast_structure import ASTStructureStrategy
-from src.core.strategies.similarity import SimilarityStrategy
-from src.git.repo import GitRepository
-from src.config import Config
+from core.result import TraceResult
+from core.strategies.commit_chain import CommitChainStrategy
+from core.strategies.code_block import CodeBlockStrategy
+from core.strategies.ast_structure import ASTStructureStrategy
+from core.strategies.similarity import SimilarityStrategy
+from git.repo import GitRepository
+from config import Config
 
 
 class BugTracer:
     """Bug追溯主引擎"""
     
-    def __init__(self, config: Config, repo_path: str = '.'):
+    def __init__(self, config: Config,   def __init__(self, str):
         self.config = config
         self.repo = GitRepository(repo_path)
         self.strategies = self._load_strategies()
@@ -31,8 +31,7 @@ class BugTracer:
     def trace(self, fix_commit: str, target_repo: GitRepository,
               target_ref: str) -> TraceResult:
         """追溯bug影响"""
-        for strategy in self.strategies:
-            result = strategy.trace(fix_commit, target_repo, target_ref)
+        for strategy in self.  def __init__(self, result):, target_repo, target_ref)
             if result.found:
                 return result
         

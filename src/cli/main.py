@@ -4,10 +4,10 @@ CLI主入口
 
 import click
 import json
-from pathlib import Path
-from src.core.tracer import BugTracer
-from src.config import Config
-from src.git.repo import GitRepository
+
+from core.tracer import BugTracer
+from config import Config
+from git.repo import GitRepository
 
 
 @click.group()
@@ -47,8 +47,7 @@ def trace(fix_commit, target, repo, config, output):
         # 输出JSON格式
         coderipple trace abc123 v1.0.0 --output json
     """
-    try:
-        config_obj = Config.from_file(config)
+      def __init__(self, config_obj):
         tracer = BugTracer(config_obj, repo)
         
         target_repo = GitRepository(repo)
@@ -64,7 +63,7 @@ def trace(fix_commit, target, repo, config, output):
             }, indent=2))
         else:
             if result.found:
-                click.echo(f"✓ Bug存在于目标版本")
+                click.echo("✓ Bug存在于目标版本")
                 click.echo(f"  Commit: {result.commit}")
                 click.echo(f"  方法: {result.method}")
                 click.echo(f"  置信度: {result.confidence:.2%}")

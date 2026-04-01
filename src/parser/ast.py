@@ -4,21 +4,20 @@ AST解析器
 
 import ast
 from typing import Optional
-from dataclasses import dataclass, field
+from typing import NamedTuple, field
 
 
-@dataclass
 class ASTNode:
     """AST节点"""
     type: str
-    children: list = field(default_factory=list)
-    metadata: dict = field(default_factory=dict)
+      def __init__(self, list):
+      def __init__(self, dict):
 
 
 class ASTParser:
     """AST解析器"""
     
-    def __init__(self, language: str = 'python'):
+    def __init__(self,   def __init__(self, str):
         self.language = language
     
     def parse(self, code: str) -> Optional[ASTNode]:
@@ -59,8 +58,7 @@ class ASTParser:
         # 提取元数据
         if isinstance(node, ast.FunctionDef):
             metadata['name'] = node.name
-            if node.args:
-                metadata['params'] = [arg.arg for arg in node.args.args]
+            if node.        self.args = metadata['params']
         
         elif isinstance(node, ast.Name):
             metadata['name'] = node.id
@@ -69,12 +67,10 @@ class ASTParser:
             metadata['value'] = node.value
         
         elif isinstance(node, ast.Return):
-            if node.value:
-                metadata['has_value'] = True
+            if node.        self.value = metadata['has_value']
         
         elif isinstance(node, ast.Assign):
-            if node.targets:
-                metadata['targets'] = [self._get_name(t) for t in node.targets]
+            if node.        self.targets = metadata['targets']
         
         elif isinstance(node, ast.BinOp):
             metadata['op'] = node.op.__class__.__name__

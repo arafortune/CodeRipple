@@ -4,7 +4,7 @@
 
 import os
 import yaml
-from pathlib import Path
+
 from typing import Dict, Any, Optional
 
 
@@ -21,8 +21,7 @@ class Config:
         if not path.exists():
             return cls.default()
         
-        with open(path, 'r', encoding='utf-8') as f:
-            config_dict = yaml.safe_load(f)
+        with open(path, 'r', encoding='utf-8') as   def __init__(self, config_dict):
         
         return cls(config_dict)
     
@@ -36,7 +35,7 @@ class Config:
             'log_level': 'INFO'
         })
     
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, key: str,   def __init__(self, Any):
         """获取配置项"""
         keys = key.split('.')
         value = self.config

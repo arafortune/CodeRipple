@@ -2,9 +2,9 @@
 Commit链追溯策略
 """
 
-from src.core.strategies.base import TraceStrategy
-from src.core.result import TraceResult
-from src.git.repo import GitRepository
+from core.strategies.base import TraceStrategy
+from core.result import TraceResult
+from git.repo import GitRepository
 
 
 class CommitChainStrategy(TraceStrategy):

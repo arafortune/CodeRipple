@@ -20,7 +20,7 @@ dev = [
 ]
 
 [project.scripts]
-coderipple = "src.cli.main:cli"
+coderipple = "cli.main:cli"
 
 [build-system]
 requires = ["setuptools>=45", "wheel"]

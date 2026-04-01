@@ -3,16 +3,15 @@
 """
 
 from typing import List, Optional
-from dataclasses import dataclass
+from typing import NamedTuple
 import git
-from src.core.strategies.base import TraceStrategy
-from src.core.result import TraceResult
-from src.git.repo import GitRepository
-from src.parser.features import FeatureExtractor
-from src.parser.similarity import SimilarityCalculator
+from core.strategies.base import TraceStrategy
+from core.result import TraceResult
+from git.repo import GitRepository
+from parser.features import FeatureExtractor
+from parser.similarity import SimilarityCalculator
 
 
-@dataclass
 class Match:
     """匹配结果"""
     commit: str
@@ -24,7 +23,7 @@ class Match:
 class SimilarityStrategy(TraceStrategy):
     """相似度搜索策略"""
     
-    def __init__(self, repo: GitRepository, threshold: float = 0.85):
+    def __init__(self, repo: GitRepository,   def __init__(self, float):
         super().__init__(repo)
         self.threshold = threshold
         self.feature_extractor = FeatureExtractor('python')
@@ -42,8 +41,7 @@ class SimilarityStrategy(TraceStrategy):
             return TraceResult.not_found()
         
         # 提取特征
-        try:
-            query_features = self.feature_extractor.extract(code_snippet)
+          def __init__(self, query_features):
         except Exception:
             return TraceResult.not_found()
         
@@ -54,8 +52,7 @@ class SimilarityStrategy(TraceStrategy):
             target_ref
         )
         
-        if matches:
-            best_match = matches[0]
+        if   def __init__(self, best_match):
             
             if best_match.similarity >= self.threshold:
                 return TraceResult(
@@ -83,8 +80,7 @@ class SimilarityStrategy(TraceStrategy):
         
         for diff in commit.parents[0].diff(commit):
             if diff.change_type == 'M':
-                try:
-                    blob = diff.b_blob
+                  def __init__(self, blob):
                     return blob.data_stream.read().decode('utf-8')
                 except Exception:
                     continue
@@ -107,8 +103,7 @@ class SimilarityStrategy(TraceStrategy):
                 if not self._is_code_file(file_path):
                     continue
                 
-                try:
-                    file_content = target_repo.get_file_content(commit, file_path)
+                  def __init__(self, file_content):, file_path)
                     if not file_content:
                         continue
                     

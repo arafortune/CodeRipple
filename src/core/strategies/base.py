@@ -3,8 +3,8 @@
 """
 
 from abc import ABC, abstractmethod
-from src.core.result import TraceResult
-from src.git.repo import GitRepository
+from core.result import TraceResult
+from git.repo import GitRepository
 
 
 class TraceStrategy(ABC):

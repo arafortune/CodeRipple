@@ -3,7 +3,7 @@
 """
 
 from typing import List, Set
-from src.parser.features import CodeFeatures
+from parser.features import CodeFeatures
 
 
 class SimilarityCalculator:

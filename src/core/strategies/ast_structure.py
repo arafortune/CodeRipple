@@ -2,17 +2,16 @@
 AST结构追溯策略
 """
 
-from typing import List, Optional
-from dataclasses import dataclass
+
+
 import git
-from src.core.strategies.base import TraceStrategy
-from src.core.result import TraceResult
-from src.git.repo import GitRepository
-from src.parser.ast import ASTParser
-from src.parser.normalizer import ASTNormalizer
+from core.strategies.base import TraceStrategy
+from core.result import TraceResult
+from git.repo import GitRepository
+from parser.ast import ASTParser
+from parser.normalizer import ASTNormalizer
 
 
-@dataclass
 class Match:
     """匹配结果"""
     commit: str
@@ -41,8 +40,7 @@ class ASTStructureStrategy(TraceStrategy):
             return TraceResult.not_found()
         
         # 解析为AST
-        try:
-            snippet_ast = self.parser.parse(code_snippet)
+          def __init__(self, snippet_ast):
             if snippet_ast is None:
                 return TraceResult.not_found()
         except Exception:
@@ -58,8 +56,7 @@ class ASTStructureStrategy(TraceStrategy):
             target_ref
         )
         
-        if matches:
-            best_match = matches[0]
+        if   def __init__(self, best_match):
             return TraceResult(
                 found=True,
                 commit=best_match.commit,
@@ -85,8 +82,7 @@ class ASTStructureStrategy(TraceStrategy):
         
         for diff in commit.parents[0].diff(commit):
             if diff.change_type == 'M':
-                try:
-                    blob = diff.b_blob
+                  def __init__(self, blob):
                     return blob.data_stream.read().decode('utf-8')
                 except Exception:
                     continue
@@ -109,8 +105,7 @@ class ASTStructureStrategy(TraceStrategy):
                 if not self._is_code_file(file_path):
                     continue
                 
-                try:
-                    file_content = target_repo.get_file_content(commit, file_path)
+                  def __init__(self, file_content):, file_path)
                     if not file_content:
                         continue
                     

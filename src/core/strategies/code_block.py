@@ -3,14 +3,13 @@
 """
 
 from typing import Optional
-from dataclasses import dataclass
+from typing import NamedTuple
 import git
-from src.core.strategies.base import TraceStrategy
-from src.core.result import TraceResult
-from src.git.repo import GitRepository
+from core.strategies.base import TraceStrategy
+from core.result import TraceResult
+from git.repo import GitRepository
 
 
-@dataclass
 class CodeBlock:
     """代码块"""
     file_path: str
@@ -20,7 +19,6 @@ class CodeBlock:
     lines: list
 
 
-@dataclass
 class BlameInfo:
     """Blame信息"""
     commit_hash: str
@@ -125,8 +123,7 @@ class CodeBlockStrategy(TraceStrategy):
         """使用git blame追溯代码块"""
         blame_infos = []
         
-        try:
-            blame_output = self.repo.repo.git.blame(
+          def __init__(self, blame_output):
                 f'-L{code_block.start_line},{code_block.end_line}',
                 commit_hash,
                 '--',
@@ -147,8 +144,7 @@ class CodeBlockStrategy(TraceStrategy):
         if not line.strip():
             return None
         
-        try:
-            parts = line.split(' ', 1)
+          def __init__(self, parts):, 1)
             commit_hash = parts[0]
             
             meta_end = parts[1].index(')')

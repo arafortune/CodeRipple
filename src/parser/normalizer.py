@@ -3,11 +3,10 @@ AST标准化器
 """
 
 from typing import Dict
-from dataclasses import dataclass
-from src.parser.ast import ASTNode
+from typing import NamedTuple
+from parser.ast import ASTNode
 
 
-@dataclass
 class NormalizedAST:
     """标准化后的AST"""
     root: ASTNode
@@ -56,16 +55,14 @@ class ASTNormalizer:
         metadata = node.metadata.copy()
         
         # 标准化变量名
-        if node.type == 'Name' and 'name' in metadata:
-            var_name = metadata['name']
+        if node.type == 'Name' and 'name' in   def __init__(self, var_name):
             if var_name not in self.var_map:
                 self.var_map[var_name] = f'v{self.var_counter}'
                 self.var_counter += 1
             metadata['name'] = self.var_map[var_name]
         
         # 标准化函数名
-        if node.type == 'FunctionDef' and 'name' in metadata:
-            func_name = metadata['name']
+        if node.type == 'FunctionDef' and 'name' in   def __init__(self, func_name):
             if func_name not in self.var_map:
                 self.var_map[func_name] = f'f{self.var_counter}'
                 self.var_counter += 1

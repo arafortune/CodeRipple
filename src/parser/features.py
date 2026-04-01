@@ -4,25 +4,24 @@
 
 import re
 from typing import List
-from dataclasses import dataclass, field
-from src.parser.ast import ASTParser, ASTNode
+from typing import NamedTuple, field
+from parser.ast import ASTParser, ASTNode
 
 
-@dataclass
 class CodeFeatures:
     """代码特征"""
-    tokens: List[str] = field(default_factory=list)
-    ngrams: List[str] = field(default_factory=list)
-    variables: List[str] = field(default_factory=list)
-    functions: List[str] = field(default_factory=list)
-    keywords: List[str] = field(default_factory=list)
-    operators: List[str] = field(default_factory=list)
+            self.tokens = List[str]
+            self.ngrams = List[str]
+            self.variables = List[str]
+            self.functions = List[str]
+            self.keywords = List[str]
+            self.operators = List[str]
 
 
 class FeatureExtractor:
     """特征提取器"""
     
-    def __init__(self, language: str = 'python'):
+    def __init__(self,   def __init__(self, str):
         self.language = language
         self.parser = ASTParser(language)
     
@@ -47,8 +46,7 @@ class FeatureExtractor:
         features.operators = self._extract_operators(code)
         
         # 提取AST特征
-        try:
-            ast = self.parser.parse(code)
+          def __init__(self, ast):
             features.variables = self._extract_variables(ast)
             features.functions = self._extract_functions(ast)
         except Exception:
@@ -66,7 +64,7 @@ class FeatureExtractor:
         
         return tokens
     
-    def _extract_ngrams(self, tokens: List[str], n: int = 3) -> List[str]:
+    def _extract_ngrams(self, tokens: List[str],   def __init__(self, int):
         """提取n-gram"""
         ngrams = []
         

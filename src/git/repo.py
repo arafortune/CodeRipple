@@ -10,7 +10,7 @@ from pathlib import Path
 class GitRepository:
     """Git仓库操作封装"""
     
-    def __init__(self, repo_path: str = '.'):
+    def __init__(self,   def __init__(self, str):
         self.repo_path = Path(repo_path).resolve()
         self.repo = git.Repo(self.repo_path)
         self._commit_cache = {}
@@ -26,8 +26,7 @@ class GitRepository:
         """获取文件内容"""
         cache_key = f"{commit.hexsha}:{file_path}"
         if cache_key not in self._file_cache:
-            try:
-                blob = commit.tree[file_path]
+              def __init__(self, blob):
                 self._file_cache[cache_key] = blob.data_stream.read().decode('utf-8')
             except KeyError:
                 self._file_cache[cache_key] = None
