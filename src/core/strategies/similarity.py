@@ -3,7 +3,8 @@
 """
 
 from dataclasses import dataclass
-from typing import List, Optional
+from pathlib import Path
+from typing import List, Optional, Set
 
 from src.core.result import TraceResult
 from src.core.strategies.base import TraceStrategy
@@ -36,13 +37,14 @@ class SimilarityStrategy(TraceStrategy):
         code_snippet = self._extract_code_snippet(fix_commit)
         if not code_snippet:
             return TraceResult.not_found()
+        candidate_paths = self._extract_candidate_paths(fix_commit)
 
         try:
             query_features = self.feature_extractor.extract(code_snippet)
         except Exception:
             return TraceResult.not_found()
 
-        matches = self._search_similar(query_features, target_ref)
+        matches = self._search_similar(query_features, target_ref, candidate_paths)
 
         if matches:
             best_match = matches[0]
@@ -76,7 +78,7 @@ class SimilarityStrategy(TraceStrategy):
 
         return None
 
-    def _search_similar(self, query_features, target_ref: str) -> List[Match]:
+    def _search_similar(self, query_features, target_ref: str, candidate_paths: Set[str]) -> List[Match]:
         """搜索相似代码"""
         matches: List[Match] = []
 
@@ -87,6 +89,8 @@ class SimilarityStrategy(TraceStrategy):
 
                 file_path = item.path
                 if not self._is_code_file(file_path):
+                    continue
+                if not self._is_candidate_file(file_path, candidate_paths):
                     continue
 
                 try:
@@ -105,6 +109,29 @@ class SimilarityStrategy(TraceStrategy):
 
         matches.sort(key=lambda x: x.similarity, reverse=True)
         return matches
+
+    def _extract_candidate_paths(self, commit_hash: str) -> Set[str]:
+        """提取fix commit关联的候选文件路径"""
+        commit = self.repo.get_commit(commit_hash)
+        if not commit.parents:
+            return set()
+
+        paths: Set[str] = set()
+        for diff in commit.parents[0].diff(commit):
+            for path in (diff.a_path, diff.b_path):
+                if path and self._is_code_file(path):
+                    paths.add(path)
+        return paths
+
+    def _is_candidate_file(self, file_path: str, candidate_paths: Set[str]) -> bool:
+        """检查文件是否在候选范围内"""
+        if not candidate_paths:
+            return True
+        if file_path in candidate_paths:
+            return True
+
+        file_name = Path(file_path).name
+        return any(file_name == Path(candidate).name for candidate in candidate_paths)
 
     def _is_code_file(self, file_path: str) -> bool:
         """检查是否是代码文件"""

@@ -29,6 +29,25 @@ class TestASTStructureStrategy:
         
         assert snippet is not None
         assert "def func" in snippet
+
+    def test_extract_candidate_paths(self, strategy, test_repo):
+        """测试提取候选路径"""
+        git_repo = git.Repo(test_repo)
+
+        test_file = test_repo / "pkg" / "test.py"
+        test_file.parent.mkdir()
+        test_file.write_text("def func(): return 1")
+        git_repo.index.add(["pkg/test.py"])
+        commit = git_repo.index.commit("Add function")
+
+        paths = strategy._extract_candidate_paths(commit.hexsha)
+
+        assert "pkg/test.py" in paths
+
+    def test_is_candidate_file_matches_basename(self, strategy):
+        """测试按文件名过滤候选"""
+        assert strategy._is_candidate_file("other/test.py", {"pkg/test.py"}) is True
+        assert strategy._is_candidate_file("other/demo.py", {"pkg/test.py"}) is False
     
     def test_priority(self, strategy):
         assert strategy.priority == 3
