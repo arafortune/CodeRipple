@@ -50,8 +50,18 @@ def trace(fix_commit, target, repo, config, output):
                 click.echo(f"  Commit: {result.commit}")
                 click.echo(f"  方法: {result.method}")
                 click.echo(f"  置信度: {result.confidence:.2%}")
+                attempts = result.details.get("attempts", [])
+                if attempts:
+                    click.echo(f"  尝试策略数: {len(attempts)}")
             else:
                 click.echo("✗ Bug不存在于目标版本")
+                attempts = result.details.get("attempts", [])
+                if attempts:
+                    click.echo("  策略摘要:")
+                    for attempt in attempts:
+                        click.echo(
+                            f"    - {attempt['method']}: found={attempt['found']}, confidence={attempt['confidence']:.2%}"
+                        )
 
     except Exception as e:
         click.echo(f"错误: {e}", err=True)

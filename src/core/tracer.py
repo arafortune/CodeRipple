@@ -32,9 +32,27 @@ class BugTracer:
 
     def trace(self, fix_commit: str, target_ref: str) -> TraceResult:
         """追溯bug影响"""
+        attempts = []
         for strategy in self.strategies:
             result = strategy.trace(fix_commit, target_ref)
+            attempts.append(
+                {
+                    "method": result.method or strategy.__class__.__name__.replace("Strategy", "").lower(),
+                    "found": result.found,
+                    "confidence": result.confidence,
+                    "details": result.details,
+                }
+            )
             if result.found:
+                result.details.setdefault("target_ref", target_ref)
+                result.details.setdefault("fix_commit", fix_commit)
+                result.details["attempts"] = attempts
                 return result
 
-        return TraceResult.not_found()
+        return TraceResult.not_found(
+            {
+                "target_ref": target_ref,
+                "fix_commit": fix_commit,
+                "attempts": attempts,
+            }
+        )

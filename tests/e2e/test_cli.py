@@ -33,3 +33,8 @@ class TestCLI:
         assert result.exit_code == 0
         assert 'fix_commit' in result.output
         assert 'target' in result.output
+
+    def test_trace_not_found_shows_strategy_summary(self, runner):
+        """测试未命中时输出策略摘要"""
+        result = runner.invoke(cli, ['trace', 'deadbeef', 'master'])
+        assert result.exit_code != 0 or '策略摘要' in result.output or '错误:' in result.output

@@ -38,6 +38,9 @@ class TestTracerFlow:
         
         assert result.found is True
         assert result.confidence >= 0.9
+        assert result.details["target_ref"] == "release/v1.0"
+        assert result.details["fix_commit"] == fix_commit.hexsha
+        assert len(result.details["attempts"]) >= 1
     
     def test_strategy_chain(self, tracer, test_repo):
         """测试策略链"""
@@ -56,3 +59,22 @@ class TestTracerFlow:
         
         assert result.found is True
         assert result.method in ["commit_chain", "code_block"]
+
+    def test_not_found_contains_attempts(self, tracer, test_repo):
+        """测试未命中时返回策略摘要"""
+        git_repo = git.Repo(test_repo)
+
+        git_repo.git.checkout("-b", "feature")
+        feature_file = test_repo / "feature.py"
+        feature_file.write_text("def only_feature():\n    return 1\n")
+        git_repo.index.add(["feature.py"])
+        feature_commit = git_repo.index.commit("Feature only change")
+
+        git_repo.git.checkout("master")
+
+        result = tracer.trace(feature_commit.hexsha, "master")
+
+        assert result.found is False
+        assert result.details["target_ref"] == "master"
+        assert result.details["fix_commit"] == feature_commit.hexsha
+        assert len(result.details["attempts"]) == len(tracer.strategies)

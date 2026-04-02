@@ -17,6 +17,6 @@ class TraceResult:
     details: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def not_found(cls) -> "TraceResult":
+    def not_found(cls, details: Optional[Dict[str, Any]] = None) -> "TraceResult":
         """未找到的结果"""
-        return cls(found=False, confidence=0.0, details={})
+        return cls(found=False, confidence=0.0, details=details or {})
