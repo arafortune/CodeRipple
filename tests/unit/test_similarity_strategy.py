@@ -21,14 +21,25 @@ class TestSimilarityStrategy:
         git_repo = git.Repo(test_repo)
         
         test_file = test_repo / "test.py"
-        test_file.write_text("def func(): return 1")
+        test_file.write_text(
+            "def func1():\n    return 1\n\n"
+            "def func2():\n    value = 2\n    return value\n"
+        )
         git_repo.index.add(["test.py"])
-        commit = git_repo.index.commit("Add function")
+        git_repo.index.commit("Add functions")
+
+        test_file.write_text(
+            "def func1():\n    return 1\n\n"
+            "def func2():\n    value = 3\n    return value\n"
+        )
+        git_repo.index.add(["test.py"])
+        commit = git_repo.index.commit("Update function")
         
         snippet = strategy._extract_code_snippet(commit.hexsha)
         
         assert snippet is not None
-        assert "def func" in snippet
+        assert "def func2" in snippet
+        assert "def func1" not in snippet
 
     def test_extract_candidate_paths(self, strategy, test_repo):
         """测试提取候选路径"""

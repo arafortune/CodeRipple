@@ -39,6 +39,43 @@ class ASTParser:
         tree = ast.parse(code)
         return self._convert_ast_node(tree)
 
+    def extract_relevant_snippet(self, code: str, changed_lines: List[int]) -> str:
+        """提取包含变更行的最小函数/类代码片段"""
+        if self.language != "python" or not code.strip() or not changed_lines:
+            return code
+
+        tree = ast.parse(code)
+        target_node = self._find_smallest_enclosing_node(tree, changed_lines)
+        if target_node is None:
+            return code
+
+        snippet = ast.get_source_segment(code, target_node)
+        return snippet or code
+
+    def _find_smallest_enclosing_node(
+        self, tree: ast.AST, changed_lines: List[int]
+    ) -> Optional[ast.AST]:
+        """找到包含变更行的最小函数/类节点"""
+        relevant_nodes: List[ast.AST] = []
+
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                continue
+            start = getattr(node, "lineno", None)
+            end = getattr(node, "end_lineno", None)
+            if start is None or end is None:
+                continue
+            if any(start <= line <= end for line in changed_lines):
+                relevant_nodes.append(node)
+
+        if not relevant_nodes:
+            return None
+
+        return min(
+            relevant_nodes,
+            key=lambda node: (getattr(node, "end_lineno", 0) - getattr(node, "lineno", 0), getattr(node, "lineno", 0)),
+        )
+
     def _convert_ast_node(self, node: ast.AST) -> ASTNode:
         """将Python AST节点转换为通用AST节点"""
         if node is None:

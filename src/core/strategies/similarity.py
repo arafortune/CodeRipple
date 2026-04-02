@@ -69,14 +69,54 @@ class SimilarityStrategy(TraceStrategy):
         if not commit.parents:
             return None
 
-        for diff in commit.parents[0].diff(commit):
-            if diff.change_type in {"M", "A"} and (diff.b_path or diff.a_path):
-                try:
-                    return self.repo.get_file_content(commit, diff.b_path or diff.a_path)  # type: ignore[arg-type]
-                except Exception:
+        for diff in commit.parents[0].diff(commit, create_patch=True):
+            try:
+                path = diff.b_path or diff.a_path
+                if not path:
                     continue
+                content = self.repo.get_file_content(commit, path)
+                if not content:
+                    continue
+                changed_lines = self._extract_added_lines(self._to_text(diff.diff))
+                if not changed_lines:
+                    continue
+                return self.feature_extractor.parser.extract_relevant_snippet(content, changed_lines)
+            except Exception:
+                continue
 
         return None
+
+    def _extract_added_lines(self, diff_text: str) -> List[int]:
+        """从diff中提取新增行号"""
+        added_lines: List[int] = []
+        current_line = 0
+
+        for line in diff_text.split("\n"):
+            if line.startswith("@@"):
+                parts = line.split(" ")
+                if len(parts) < 3:
+                    continue
+                plus_part = parts[2]
+                try:
+                    current_line = int(plus_part[1:].split(",")[0])
+                except ValueError:
+                    current_line = 0
+            elif line.startswith("+") and not line.startswith("+++"):
+                added_lines.append(current_line)
+                current_line += 1
+            elif line.startswith("-") and not line.startswith("---"):
+                continue
+            else:
+                current_line += 1
+
+        return added_lines
+
+    def _to_text(self, value) -> str:
+        if isinstance(value, bytes):
+            return value.decode("utf-8", errors="ignore")
+        if isinstance(value, str):
+            return value
+        return ""
 
     def _search_similar(self, query_features, target_ref: str, candidate_paths: Set[str]) -> List[Match]:
         """搜索相似代码"""
