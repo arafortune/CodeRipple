@@ -98,6 +98,57 @@ class TestCodeBlockStrategy:
         """测试上下文加权得分"""
         score = strategy._calculate_match_score(0.8, 0.5, True)
         assert score == pytest.approx(0.71)
+
+    def test_pair_move_candidates(self, strategy):
+        """测试删除/新增配对为移动候选"""
+        class DiffStub:
+            def __init__(self, a_path, b_path, diff):
+                self.a_path = a_path
+                self.b_path = b_path
+                self.diff = diff.encode()
+
+        deleted = DiffStub(
+            "src/old.py",
+            None,
+            "@@ -1,2 +0,0 @@\n-def buggy():\n-    return 1\n",
+        )
+        added = DiffStub(
+            None,
+            "app/new.py",
+            "@@ -0,0 +1,2 @@\n+def buggy():\n+    return 2\n",
+        )
+
+        candidates = strategy._pair_move_candidates([deleted], [added])
+
+        assert len(candidates) == 1
+        assert candidates[0].file_path == "app/new.py"
+        assert candidates[0].source == "paired_move"
+
+    def test_trace_found_after_file_move(self, strategy, test_repo):
+        """测试文件移动后仍可追溯"""
+        git_repo = git.Repo(test_repo)
+
+        target_file = test_repo / "src" / "legacy.py"
+        target_file.parent.mkdir()
+        target_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["src/legacy.py"])
+        git_repo.index.commit("Introduce bug on release")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        git_repo.git.checkout("master")
+
+        new_dir = test_repo / "pkg"
+        new_dir.mkdir()
+        git_repo.git.mv("src/legacy.py", "pkg/buggy.py")
+        moved_file = test_repo / "pkg" / "buggy.py"
+        moved_file.write_text("def buggy():\n    return 1 / 1\n")
+        git_repo.index.add(["pkg/buggy.py"])
+        fix_commit = git_repo.index.commit("Move file and fix bug")
+
+        result = strategy.trace(fix_commit.hexsha, "release/v1.0")
+
+        assert result.found is True
+        assert result.details["file"] == "src/legacy.py"
     
     def test_priority(self, strategy):
         assert strategy.priority == 2
