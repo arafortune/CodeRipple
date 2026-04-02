@@ -2,6 +2,7 @@
 Bug追溯器
 """
 
+import re
 from typing import List
 
 from src.config import Config
@@ -35,19 +36,27 @@ class BugTracer:
         attempts = []
         for strategy in self.strategies:
             result = strategy.trace(fix_commit, target_ref)
-            attempts.append(
-                {
-                    "method": result.method or strategy.__class__.__name__.replace("Strategy", "").lower(),
-                    "found": result.found,
-                    "confidence": result.confidence,
-                    "details": result.details,
-                }
-            )
+            attempt = {
+                "method": result.method or self._strategy_name(strategy),
+                "found": result.found,
+                "confidence": result.confidence,
+                "details": result.details,
+            }
+            attempts.append(attempt)
             if result.found:
                 result.details.setdefault("target_ref", target_ref)
                 result.details.setdefault("fix_commit", fix_commit)
                 result.details["attempts"] = attempts
                 return result
+            if result.details.get("contains_fix_commit"):
+                return TraceResult.not_found(
+                    {
+                        "target_ref": target_ref,
+                        "fix_commit": fix_commit,
+                        "attempts": attempts,
+                        "reason": result.details["reason"],
+                    }
+                )
 
         return TraceResult.not_found(
             {
@@ -56,3 +65,8 @@ class BugTracer:
                 "attempts": attempts,
             }
         )
+
+    def _strategy_name(self, strategy) -> str:
+        """将策略类名转换为稳定的snake_case标识"""
+        name = strategy.__class__.__name__.replace("Strategy", "")
+        return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()

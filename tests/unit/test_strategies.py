@@ -18,7 +18,7 @@ class TestCommitChainStrategy:
         return CommitChainStrategy(GitRepository(test_repo))
     
     def test_trace_found(self, strategy, test_repo):
-        """测试追溯成功"""
+        """测试目标版本已包含修复时不受影响"""
         git_repo = git.Repo(test_repo)
         
         test_file = test_repo / "test.txt"
@@ -31,27 +31,75 @@ class TestCommitChainStrategy:
         commit2 = git_repo.index.commit("commit 2")
         
         result = strategy.trace(commit1.hexsha, commit2.hexsha)
-        
+
+        assert result.found is False
+        assert result.details["reason"] == "fix commit is already contained in target ref"
+
+    def test_trace_found_when_fix_not_in_target(self, strategy, test_repo):
+        """测试目标版本尚未包含修复commit时判定为受影响"""
+        git_repo = git.Repo(test_repo)
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        test_file = test_repo / "test.txt"
+        test_file.write_text("buggy")
+        git_repo.index.add(["test.txt"])
+        git_repo.index.commit("buggy release")
+
+        git_repo.git.checkout("master")
+        test_file.write_text("fixed")
+        git_repo.index.add(["test.txt"])
+        fix_commit = git_repo.index.commit("fix on master")
+
+        result = strategy.trace(fix_commit.hexsha, "release/v1.0")
+
         assert result.found is True
-        assert result.commit == commit1.hexsha
+        assert result.commit == fix_commit.hexsha
         assert result.method == "commit_chain"
         assert result.confidence == 1.0
-    
+        assert result.details["reason"] == "fix commit is not reachable from target ref"
+
     def test_trace_not_found(self, strategy, test_repo):
-        """测试追溯失败"""
+        """测试目标版本已包含修复时不受影响"""
         git_repo = git.Repo(test_repo)
-        
+
+        test_file = test_repo / "test.txt"
+        test_file.write_text("commit 1")
+        git_repo.index.add(["test.txt"])
+        commit1 = git_repo.index.commit("commit 1")
+
+        test_file.write_text("commit 2")
+        git_repo.index.add(["test.txt"])
+        commit2 = git_repo.index.commit("commit 2")
+
+        result = strategy.trace(commit1.hexsha, commit2.hexsha)
+
+        assert result.found is False
+        assert result.commit is None
+        assert result.method is None
+        assert result.confidence == 0.0
+        assert result.details["reason"] == "fix commit is already contained in target ref"
+
+    def test_trace_reports_affected_for_diverged_branch(self, strategy, test_repo):
+        """测试分叉分支未包含修复时仍判定受影响"""
+        git_repo = git.Repo(test_repo)
+
         git_repo.git.checkout("-b", "feature")
         test_file = test_repo / "feature.txt"
-        test_file.write_text("feature")
+        test_file.write_text("feature bug")
         git_repo.index.add(["feature.txt"])
-        commit1 = git_repo.index.commit("feature commit")
-        
+        git_repo.index.commit("feature bug")
+
         git_repo.git.checkout("master")
-        
-        result = strategy.trace(commit1.hexsha, "master")
-        
-        assert result.found is False
+        test_file = test_repo / "main.txt"
+        test_file.write_text("fix")
+        git_repo.index.add(["main.txt"])
+        fix_commit = git_repo.index.commit("main fix")
+
+        result = strategy.trace(fix_commit.hexsha, "feature")
+
+        assert result.found is True
+        assert result.method == "commit_chain"
+        assert result.commit == fix_commit.hexsha
     
     def test_priority(self, strategy):
         assert strategy.priority == 1

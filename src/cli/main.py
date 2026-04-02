@@ -34,7 +34,7 @@ def trace(fix_commit, target, repo, config, output):
             click.echo(
                 json.dumps(
                     {
-                        "found": result.found,
+                        "affected": result.found,
                         "commit": result.commit,
                         "method": result.method,
                         "confidence": result.confidence,
@@ -60,7 +60,7 @@ def trace(fix_commit, target, repo, config, output):
                     click.echo("  策略摘要:")
                     for attempt in attempts:
                         click.echo(
-                            f"    - {attempt['method']}: found={attempt['found']}, confidence={attempt['confidence']:.2%}"
+                            f"    - {attempt['method']}: affected={attempt['found']}, confidence={attempt['confidence']:.2%}"
                         )
 
     except Exception as e:

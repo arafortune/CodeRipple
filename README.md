@@ -4,7 +4,7 @@ Git历史分析工具 - 追溯bug是否影响目标版本
 
 ## 功能
 
-- 检查修复commit是否在目标版本中
+- 检查目标版本是否尚未包含修复commit，从而判断Bug是否仍受影响
 - 支持文件移动、功能重构
 - 多种追溯策略：commit链、代码块、AST结构、相似度搜索
 
@@ -26,7 +26,7 @@ uv run coderipple trace <fix_commit> <target_tag_or_branch>
 ### 示例
 
 ```bash
-# 检查commit abc123是否影响v1.0.0
+# 检查修复提交 abc123 对应的Bug是否仍影响 v1.0.0
 uv run coderipple trace abc123 v1.0.0
 
 # 输出JSON格式

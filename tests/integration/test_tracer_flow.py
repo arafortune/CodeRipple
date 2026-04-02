@@ -56,25 +56,51 @@ class TestTracerFlow:
         commit2 = git_repo.index.commit("v2")
         
         result = tracer.trace(commit1.hexsha, commit2.hexsha)
-        
-        assert result.found is True
-        assert result.method in ["commit_chain", "code_block"]
+
+        assert result.found is False
+        assert result.details["attempts"][0]["method"] == "commit_chain"
+        assert result.details["attempts"][0]["found"] is False
 
     def test_not_found_contains_attempts(self, tracer, test_repo):
-        """测试未命中时返回策略摘要"""
+        """测试未包含修复时返回策略摘要"""
         git_repo = git.Repo(test_repo)
 
         git_repo.git.checkout("-b", "feature")
         feature_file = test_repo / "feature.py"
-        feature_file.write_text("def only_feature():\n    return 1\n")
+        feature_file.write_text("def buggy():\n    return 1 / 0\n")
         git_repo.index.add(["feature.py"])
-        feature_commit = git_repo.index.commit("Feature only change")
+        git_repo.index.commit("Buggy feature state")
 
         git_repo.git.checkout("master")
+        feature_file = test_repo / "feature.py"
+        feature_file.write_text("def buggy():\n    return 1 / 1\n")
+        git_repo.index.add(["feature.py"])
+        fix_commit = git_repo.index.commit("Fix on master")
 
-        result = tracer.trace(feature_commit.hexsha, "master")
+        result = tracer.trace(fix_commit.hexsha, "feature")
 
-        assert result.found is False
-        assert result.details["target_ref"] == "master"
-        assert result.details["fix_commit"] == feature_commit.hexsha
-        assert len(result.details["attempts"]) == len(tracer.strategies)
+        assert result.found is True
+        assert result.details["target_ref"] == "feature"
+        assert result.details["fix_commit"] == fix_commit.hexsha
+        assert len(result.details["attempts"]) >= 1
+
+    def test_fix_missing_from_target_reports_affected(self, tracer, test_repo):
+        """测试目标版本未包含修复commit时判定为受影响"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        git_repo.git.checkout("-b", "release/test")
+        git_repo.git.checkout("master")
+
+        bug_file.write_text("def buggy():\n    return 1 / 1\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("Fix on master")
+
+        result = tracer.trace(fix_commit.hexsha, "release/test")
+
+        assert result.found is True
+        assert result.method == "commit_chain"
