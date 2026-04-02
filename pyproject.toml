@@ -1,7 +1,7 @@
 [project]
 name = "coderipple"
 version = "0.1.0"
-description = "Git历史分析工具 - 追溯bug是否影响商用版本"
+description = "Git历史分析工具 - 追溯bug是否影响目标版本"
 authors = [
     {name = "Lin Li", email = "ara.lilin.fortune@google.com"}
 ]

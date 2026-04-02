@@ -3,7 +3,7 @@
 ## 项目概述
 
 **项目名称**: CodeRipple  
-**功能**: Git历史分析工具 - 追溯bug是否影响商用版本  
+**功能**: Git历史分析工具 - 追溯bug是否影响目标版本  
 **版本**: 0.2.0  
 **完成日期**: 2026-03-31
 
@@ -244,9 +244,6 @@ python3 -m src.cli.main trace abc123 v1.0.0 --output json
 ### 配置文件
 创建 `config/coderipple.yaml`:
 ```yaml
-# 商用版本仓库地址
-commercial_repo: "git@github.com:company/product-release.git"
-
 # 缓存路径
 cache_path: "~/.coderipple/cache"
 

@@ -12,7 +12,6 @@ from src.core.strategies.commit_chain import CommitChainStrategy
 from src.core.strategies.similarity import SimilarityStrategy
 from src.git.repo import GitRepository
 
-
 class BugTracer:
     """Bug追溯主引擎"""
 
@@ -31,10 +30,10 @@ class BugTracer:
         ]
         return sorted(strategies, key=lambda item: item.priority)
 
-    def trace(self, fix_commit: str, target_repo: GitRepository, target_ref: str) -> TraceResult:
+    def trace(self, fix_commit: str, target_ref: str) -> TraceResult:
         """追溯bug影响"""
         for strategy in self.strategies:
-            result = strategy.trace(fix_commit, target_repo, target_ref)
+            result = strategy.trace(fix_commit, target_ref)
             if result.found:
                 return result
 

@@ -1,7 +1,7 @@
 Metadata-Version: 2.4
 Name: coderipple
 Version: 0.1.0
-Summary: Git历史分析工具 - 追溯bug是否影响商用版本
+Summary: Git历史分析工具 - 追溯bug是否影响目标版本
 Author-email: Lin Li <ara.lilin.fortune@google.com>
 Requires-Python: >=3.8
 Description-Content-Type: text/markdown
@@ -14,14 +14,13 @@ Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
 
 # CodeRipple
 
-Git历史分析工具 - 追溯bug是否影响商用版本
+Git历史分析工具 - 追溯bug是否影响目标版本
 
 ## 功能
 
-- 检查修复commit是否在商用版本中
-- 支持文件移动、跨仓库移动、功能重构
+- 检查修复commit是否在目标版本中
+- 支持文件移动、功能重构
 - 多种追溯策略：commit链、代码块、AST结构、相似度搜索
-- 自动拉取远程商用版本
 
 ## 安装
 
@@ -34,7 +33,7 @@ pip install -e .
 ### 基本用法
 
 ```bash
-# 追溯bug是否影响商用版本
+# 追溯bug是否影响目标版本
 coderipple trace <fix_commit> <target_tag_or_branch>
 ```
 
@@ -44,20 +43,8 @@ coderipple trace <fix_commit> <target_tag_or_branch>
 # 检查commit abc123是否影响v1.0.0
 coderipple trace abc123 v1.0.0
 
-# 检查是否影响远程分支
-coderipple trace abc123 commercial:release/v1.0
-
 # 输出JSON格式
 coderipple trace abc123 v1.0.0 --output json
-```
-
-## 配置
-
-创建 `config/coderipple.yaml`:
-
-```yaml
-# 商用版本仓库地址
-commercial_repo: "git@github.com:company/product-release.git"
 ```
 
 ## 开发

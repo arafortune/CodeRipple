@@ -31,7 +31,6 @@ class Config:
         """默认配置"""
         return cls(
             {
-                "commercial_repo": None,
                 "cache_path": "~/.coderipple/cache",
                 "similarity_threshold": 0.85,
                 "log_level": "INFO",
@@ -50,10 +49,6 @@ class Config:
                 return default
 
         return value if value is not None else default
-
-    def get_commercial_repo(self) -> Optional[str]:
-        """获取商用版本仓库地址"""
-        return self.get("commercial_repo")
 
     def get_cache_path(self) -> Path:
         """获取缓存路径"""

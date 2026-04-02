@@ -6,7 +6,6 @@ import pytest
 import git
 from src.core.tracer import BugTracer
 from src.config import Config
-from src.git.repo import GitRepository
 
 
 class TestTracerFlow:
@@ -35,7 +34,7 @@ class TestTracerFlow:
         git_repo.index.add(["bug.py"])
         fix_commit = git_repo.index.commit("Fix bug")
         
-        result = tracer.trace(fix_commit.hexsha, GitRepository(test_repo), "release/v1.0")
+        result = tracer.trace(fix_commit.hexsha, "release/v1.0")
         
         assert result.found is True
         assert result.confidence >= 0.9
@@ -53,7 +52,7 @@ class TestTracerFlow:
         git_repo.index.add(["test.txt"])
         commit2 = git_repo.index.commit("v2")
         
-        result = tracer.trace(commit1.hexsha, GitRepository(test_repo), commit2.hexsha)
+        result = tracer.trace(commit1.hexsha, commit2.hexsha)
         
         assert result.found is True
         assert result.method in ["commit_chain", "code_block"]

@@ -30,7 +30,7 @@ class ASTStructureStrategy(TraceStrategy):
         self.parser = ASTParser("python")
         self.normalizer = ASTNormalizer()
 
-    def trace(self, fix_commit: str, target_repo: GitRepository, target_ref: str) -> TraceResult:
+    def trace(self, fix_commit: str, target_ref: str) -> TraceResult:
         """执行追溯"""
         code_snippet = self._extract_code_snippet(fix_commit)
         if not code_snippet:
@@ -45,7 +45,7 @@ class ASTStructureStrategy(TraceStrategy):
 
         normalized_snippet = self.normalizer.normalize(snippet_ast)
 
-        matches = self._search_ast_structure(normalized_snippet, target_repo, target_ref)
+        matches = self._search_ast_structure(normalized_snippet, target_ref)
         if matches:
             best_match = matches[0]
             return TraceResult(
@@ -80,11 +80,11 @@ class ASTStructureStrategy(TraceStrategy):
 
         return None
 
-    def _search_ast_structure(self, query_ast, target_repo: GitRepository, target_ref: str) -> List[Match]:
+    def _search_ast_structure(self, query_ast, target_ref: str) -> List[Match]:
         """在目标分支中搜索AST结构"""
         matches: List[Match] = []
 
-        for commit in target_repo.iter_commits(target_ref, max_count=200):
+        for commit in self.repo.iter_commits(target_ref, max_count=200):
             for item in commit.tree.traverse():
                 if item.type != "blob":
                     continue
@@ -94,7 +94,7 @@ class ASTStructureStrategy(TraceStrategy):
                     continue
 
                 try:
-                    file_content = target_repo.get_file_content(commit, file_path)
+                    file_content = self.repo.get_file_content(commit, file_path)
                     if not file_content:
                         continue
 

@@ -1,8 +1,5 @@
 # CodeRipple配置文件
 
-# 商用版本仓库地址（可选）
-# commercial_repo: "git@github.com:company/product-release.git"
-
 # 缓存路径（可选，默认：~/.coderipple/cache）
 # cache_path: "~/.coderipple/cache"
 

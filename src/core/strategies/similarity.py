@@ -31,7 +31,7 @@ class SimilarityStrategy(TraceStrategy):
         self.feature_extractor = FeatureExtractor("python")
         self.similarity_calculator = SimilarityCalculator()
 
-    def trace(self, fix_commit: str, target_repo: GitRepository, target_ref: str) -> TraceResult:
+    def trace(self, fix_commit: str, target_ref: str) -> TraceResult:
         """执行追溯"""
         code_snippet = self._extract_code_snippet(fix_commit)
         if not code_snippet:
@@ -42,7 +42,7 @@ class SimilarityStrategy(TraceStrategy):
         except Exception:
             return TraceResult.not_found()
 
-        matches = self._search_similar(query_features, target_repo, target_ref)
+        matches = self._search_similar(query_features, target_ref)
 
         if matches:
             best_match = matches[0]
@@ -76,11 +76,11 @@ class SimilarityStrategy(TraceStrategy):
 
         return None
 
-    def _search_similar(self, query_features, target_repo: GitRepository, target_ref: str) -> List[Match]:
+    def _search_similar(self, query_features, target_ref: str) -> List[Match]:
         """搜索相似代码"""
         matches: List[Match] = []
 
-        for commit in target_repo.iter_commits(target_ref, max_count=200):
+        for commit in self.repo.iter_commits(target_ref, max_count=200):
             for item in commit.tree.traverse():
                 if item.type != "blob":
                     continue
@@ -90,7 +90,7 @@ class SimilarityStrategy(TraceStrategy):
                     continue
 
                 try:
-                    file_content = target_repo.get_file_content(commit, file_path)
+                    file_content = self.repo.get_file_content(commit, file_path)
                     if not file_content:
                         continue
 

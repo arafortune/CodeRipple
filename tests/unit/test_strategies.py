@@ -30,7 +30,7 @@ class TestCommitChainStrategy:
         git_repo.index.add(["test.txt"])
         commit2 = git_repo.index.commit("commit 2")
         
-        result = strategy.trace(commit1.hexsha, GitRepository(test_repo), commit2.hexsha)
+        result = strategy.trace(commit1.hexsha, commit2.hexsha)
         
         assert result.found is True
         assert result.commit == commit1.hexsha
@@ -49,7 +49,7 @@ class TestCommitChainStrategy:
         
         git_repo.git.checkout("master")
         
-        result = strategy.trace(commit1.hexsha, GitRepository(test_repo), "master")
+        result = strategy.trace(commit1.hexsha, "master")
         
         assert result.found is False
     

@@ -8,7 +8,6 @@ import click
 
 from src.config import Config
 from src.core.tracer import BugTracer
-from src.git.repo import GitRepository
 
 
 @click.group()
@@ -22,17 +21,14 @@ def cli():
 @click.argument("fix_commit", metavar="fix_commit")
 @click.argument("target", metavar="target")
 @click.option("--repo", "-r", default=".")
-@click.option("--target-repo", "-t", default=None)
 @click.option("--config", "-c", default="config/coderipple.yaml")
 @click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]))
-def trace(fix_commit, target, repo, target_repo, config, output):
+def trace(fix_commit, target, repo, config, output):
     """追溯bug是否影响目标版本"""
     try:
         config_obj = Config.from_file(config)
         tracer = BugTracer(config_obj, repo)
-
-        resolved_target_repo = GitRepository(target_repo or repo)
-        result = tracer.trace(fix_commit, resolved_target_repo, target)
+        result = tracer.trace(fix_commit, target)
 
         if output == "json":
             click.echo(

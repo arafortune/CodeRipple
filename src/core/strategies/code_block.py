@@ -7,7 +7,6 @@ from typing import List, Optional, Set
 
 from src.core.result import TraceResult
 from src.core.strategies.base import TraceStrategy
-from src.git.repo import GitRepository
 
 
 @dataclass
@@ -24,7 +23,7 @@ class CodeBlock:
 class CodeBlockStrategy(TraceStrategy):
     """代码块追溯策略"""
 
-    def trace(self, fix_commit: str, target_repo: GitRepository, target_ref: str) -> TraceResult:
+    def trace(self, fix_commit: str, target_ref: str) -> TraceResult:
         """执行追溯"""
         code_block = self._extract_fix_code_block(fix_commit)
         if not code_block:
@@ -34,7 +33,7 @@ class CodeBlockStrategy(TraceStrategy):
         if not query_lines:
             return TraceResult.not_found()
 
-        for commit in target_repo.iter_commits(target_ref, max_count=500):
+        for commit in self.repo.iter_commits(target_ref, max_count=500):
             if not commit.parents:
                 continue
             parent = commit.parents[0]

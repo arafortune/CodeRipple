@@ -3,11 +3,10 @@
 ## 1. 项目概述
 
 ### 1.1 功能目标
-分析Git历史，检查修复commit是否影响商用版本
+分析Git历史，检查修复commit是否影响目标版本
 
 ### 1.2 核心挑战
 - 文件移动
-- 跨仓库移动
 - 功能完全重构
 
 ## 2. 核心功能
@@ -17,11 +16,6 @@
 2. 代码块内容追溯（精确度95%）
 3. AST结构追溯（精确度90%）
 4. 代码相似度搜索（精确度85%）
-
-### 2.2 远程仓库管理
-- 自动拉取商用版本
-- 支持多种认证方式
-- 智能缓存
 
 ## 3. 技术方案
 
@@ -48,7 +42,7 @@ coderipple trace <fix_commit> <target>
 from coderipple import BugTracer
 
 tracer = BugTracer()
-result = tracer.trace(fix_commit, target)
+result = tracer.trace(fix_commit, target_ref)
 ```
 
 ## 5. 实现计划

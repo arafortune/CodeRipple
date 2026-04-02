@@ -15,7 +15,7 @@ class TraceStrategy(ABC):
         self.repo = repo
 
     @abstractmethod
-    def trace(self, fix_commit: str, target_repo: GitRepository, target_ref: str) -> TraceResult:
+    def trace(self, fix_commit: str, target_ref: str) -> TraceResult:
         """执行追溯"""
         raise NotImplementedError
 
