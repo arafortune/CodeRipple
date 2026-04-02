@@ -11,7 +11,7 @@ Git历史分析工具 - 追溯bug是否影响目标版本
 ## 安装
 
 ```bash
-pip install -e .
+uv sync
 ```
 
 ## 使用
@@ -20,30 +20,30 @@ pip install -e .
 
 ```bash
 # 追溯bug是否影响目标版本
-coderipple trace <fix_commit> <target_tag_or_branch>
+uv run coderipple trace <fix_commit> <target_tag_or_branch>
 ```
 
 ### 示例
 
 ```bash
 # 检查commit abc123是否影响v1.0.0
-coderipple trace abc123 v1.0.0
+uv run coderipple trace abc123 v1.0.0
 
 # 输出JSON格式
-coderipple trace abc123 v1.0.0 --output json
+uv run coderipple trace abc123 v1.0.0 --output json
 ```
 
 ## 开发
 
 ```bash
-# 安装开发依赖
-pip install -e ".[dev]"
+# 同步依赖并安装开发依赖
+uv sync --extra dev
 
 # 运行测试
-pytest
+uv run pytest
 
 # 查看覆盖率
-pytest --cov=src --cov-report=html
+uv run pytest --cov=src --cov-report=html
 ```
 
 ## License

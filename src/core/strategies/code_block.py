@@ -18,6 +18,7 @@ class CodeBlock:
     end_line: int
     content: str
     lines: List[str]
+    context_lines: List[str]
 
 
 class CodeBlockStrategy(TraceStrategy):
@@ -30,6 +31,7 @@ class CodeBlockStrategy(TraceStrategy):
             return TraceResult.not_found()
 
         query_lines = self._normalize_lines(code_block.lines)
+        query_context = self._normalize_lines(code_block.context_lines)
         if not query_lines:
             return TraceResult.not_found()
 
@@ -38,9 +40,14 @@ class CodeBlockStrategy(TraceStrategy):
                 continue
             parent = commit.parents[0]
             for diff in parent.diff(commit, create_patch=True):
-                added = self._extract_added_content(diff)
-                score = self._overlap(query_lines, self._normalize_lines(added))
-                if score >= 0.8:
+                added, context = self._extract_patch_content(diff)
+                added_score = self._overlap(query_lines, self._normalize_lines(added))
+                score = self._calculate_match_score(
+                    added_score,
+                    self._overlap(query_context, self._normalize_lines(context)),
+                    bool(query_context),
+                )
+                if added_score >= 0.6 and score >= 0.75:
                     return TraceResult(
                         found=True,
                         commit=commit.hexsha,
@@ -50,6 +57,7 @@ class CodeBlockStrategy(TraceStrategy):
                             "file": diff.b_path or diff.a_path,
                             "lines": [code_block.start_line, code_block.end_line],
                             "match_score": score,
+                            "added_score": added_score,
                         },
                     )
 
@@ -61,10 +69,11 @@ class CodeBlockStrategy(TraceStrategy):
         if not commit.parents:
             return None
 
-        for diff in commit.parents[0].diff(commit):
+        for diff in commit.parents[0].diff(commit, create_patch=True):
             if diff.change_type in {"M", "A"}:
                 diff_text = self._to_text(diff.diff)
                 added_lines = self._extract_added_lines(diff_text)
+                _, context_lines = self._extract_patch_content(diff_text)
                 if added_lines:
                     return CodeBlock(
                         file_path=diff.b_path or diff.a_path or "",
@@ -72,6 +81,7 @@ class CodeBlockStrategy(TraceStrategy):
                         end_line=max(added_lines),
                         content=self._get_code_at_lines(commit, diff.b_path or diff.a_path or "", added_lines),
                         lines=self._get_lines_at_lines(commit, diff.b_path or diff.a_path or "", added_lines),
+                        context_lines=context_lines,
                     )
 
         return None
@@ -118,13 +128,17 @@ class CodeBlockStrategy(TraceStrategy):
         all_lines = content.split("\n")
         return [all_lines[i - 1] for i in lines if 0 < i <= len(all_lines)]
 
-    def _extract_added_content(self, diff) -> List[str]:
-        patch_text = self._to_text(diff.diff)
-        lines: List[str] = []
+    def _extract_patch_content(self, diff_or_text) -> tuple[List[str], List[str]]:
+        patch_text = self._to_text(diff_or_text.diff) if hasattr(diff_or_text, "diff") else self._to_text(diff_or_text)
+        added_lines: List[str] = []
+        context_lines: List[str] = []
         for line in patch_text.split("\n"):
             if line.startswith("+") and not line.startswith("+++"):
-                lines.append(line[1:])
-        return lines
+                added_lines.append(line[1:])
+            elif line.startswith(" ") or line.startswith("@@"):
+                if line.startswith(" "):
+                    context_lines.append(line[1:])
+        return added_lines, context_lines
 
     def _to_text(self, value) -> str:
         if isinstance(value, bytes):
@@ -145,6 +159,11 @@ class CodeBlockStrategy(TraceStrategy):
         if not left or not right:
             return 0.0
         return len(left & right) / len(left)
+
+    def _calculate_match_score(self, added_score: float, context_score: float, has_context: bool) -> float:
+        if not has_context:
+            return added_score
+        return (0.7 * added_score) + (0.3 * context_score)
 
     @property
     def priority(self) -> int:

@@ -79,6 +79,25 @@ class TestCodeBlockStrategy:
         lines = strategy._extract_added_lines(diff_text)
         assert 2 in lines
         assert 4 in lines
+
+    def test_extract_patch_content(self, strategy):
+        """测试提取新增行和上下文行"""
+        diff_text = """@@ -1,3 +1,4 @@
+ line 1
+-line 2
++line 2 modified
+ line 3
++line 4 new"""
+
+        added, context = strategy._extract_patch_content(diff_text)
+
+        assert added == ["line 2 modified", "line 4 new"]
+        assert context == ["line 1", "line 3"]
+
+    def test_calculate_match_score_with_context(self, strategy):
+        """测试上下文加权得分"""
+        score = strategy._calculate_match_score(0.8, 0.5, True)
+        assert score == pytest.approx(0.71)
     
     def test_priority(self, strategy):
         assert strategy.priority == 2
