@@ -48,6 +48,20 @@ class GitRepository:
         """迭代commit"""
         return self.repo.iter_commits(ref, max_count=max_count)
 
+    def get_changed_file_states(self, commit_hash: str) -> Dict[str, Optional[str]]:
+        """获取commit直接修改的文件在该commit中的最终内容"""
+        commit = self.get_commit(commit_hash)
+        if not commit.parents:
+            return {}
+
+        states: Dict[str, Optional[str]] = {}
+        for diff in commit.parents[0].diff(commit):
+            path = diff.b_path or diff.a_path
+            if not path:
+                continue
+            states[path] = self.get_file_content(commit, path)
+        return states
+
     def get_patch_id(self, commit_hash: str) -> Optional[str]:
         """获取commit的稳定patch-id，用于识别cherry-pick/backport等价修复"""
         if commit_hash in self._patch_id_cache:
@@ -90,3 +104,16 @@ class GitRepository:
             if candidate_patch_id and candidate_patch_id == patch_id:
                 return commit.hexsha
         return None
+
+    def has_equivalent_file_state(self, commit_hash: str, target_ref: str) -> bool:
+        """检查目标ref在被修复文件上的最终状态是否与fix commit一致"""
+        expected_states = self.get_changed_file_states(commit_hash)
+        if not expected_states:
+            return False
+
+        target_commit = self.get_commit(target_ref)
+        for path, expected_content in expected_states.items():
+            actual_content = self.get_file_content(target_commit, path)
+            if actual_content != expected_content:
+                return False
+        return True

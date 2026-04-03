@@ -15,8 +15,11 @@ class CommitChainStrategy(TraceStrategy):
 
         is_ancestor = self.repo.is_ancestor(fix_commit_obj.hexsha, target_ref)
         equivalent_commit = None if is_ancestor else self.repo.find_equivalent_commit(fix_commit_obj.hexsha, target_ref)
+        equivalent_state = False if (is_ancestor or equivalent_commit) else self.repo.has_equivalent_file_state(
+            fix_commit_obj.hexsha, target_ref
+        )
 
-        if not is_ancestor and not equivalent_commit:
+        if not is_ancestor and not equivalent_commit and not equivalent_state:
             return TraceResult(
                 found=True,
                 commit=fix_commit_obj.hexsha,
@@ -30,10 +33,15 @@ class CommitChainStrategy(TraceStrategy):
                 "reason": (
                     "fix commit is already contained in target ref"
                     if is_ancestor
-                    else "equivalent fix patch already exists in target ref"
+                    else (
+                        "equivalent fix patch already exists in target ref"
+                        if equivalent_commit
+                        else "equivalent fixed file state already exists in target ref"
+                    )
                 ),
                 "contains_fix_commit": is_ancestor,
                 "equivalent_commit": equivalent_commit,
+                "equivalent_state": equivalent_state,
             }
         )
 

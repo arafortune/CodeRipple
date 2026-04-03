@@ -278,3 +278,49 @@ class TestCLI:
         assert payload["affected"] is True
         assert payload["method"] == "commit_chain"
         assert payload["details"]["reason"] == "fix commit is not reachable from target ref"
+
+    def test_trace_reports_not_affected_for_split_backport_with_same_final_state(self, runner, test_repo):
+        """测试拆分回补但最终文件状态一致时，CLI应判定目标版本不再受影响"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy(x):\n    return 100 / x\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        release_only = test_repo / "notes.txt"
+        release_only.write_text("release note\n")
+        git_repo.index.add(["notes.txt"])
+        git_repo.index.commit("Release-only change")
+
+        git_repo.git.checkout("master")
+        bug_file.write_text("def buggy(x):\n    if x == 0:\n        return 0\n    result = 100 / x\n    return result\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("Fix on master")
+
+        git_repo.git.checkout("release/v1.0")
+        bug_file.write_text("def buggy(x):\n    if x == 0:\n        return 0\n    return 100 / x\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Backport part 1")
+        bug_file.write_text("def buggy(x):\n    if x == 0:\n        return 0\n    result = 100 / x\n    return result\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Backport part 2")
+
+        result = runner.invoke(
+            cli,
+            [
+                "trace",
+                fix_commit.hexsha,
+                "release/v1.0",
+                "--repo",
+                str(test_repo),
+                "--output",
+                "json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["affected"] is False
+        assert payload["details"]["reason"] == "equivalent fixed file state already exists in target ref"

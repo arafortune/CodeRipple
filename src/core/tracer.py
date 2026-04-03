@@ -49,7 +49,11 @@ class BugTracer:
                 result.details.setdefault("fix_commit", fix_commit)
                 result.details["attempts"] = copy.deepcopy(attempts)
                 return result
-            if result.details.get("contains_fix_commit") or result.details.get("equivalent_commit"):
+            if (
+                result.details.get("contains_fix_commit")
+                or result.details.get("equivalent_commit")
+                or result.details.get("equivalent_state")
+            ):
                 return TraceResult.not_found(
                     {
                         "target_ref": target_ref,
@@ -57,6 +61,7 @@ class BugTracer:
                         "attempts": copy.deepcopy(attempts),
                         "reason": result.details["reason"],
                         "equivalent_commit": result.details.get("equivalent_commit"),
+                        "equivalent_state": result.details.get("equivalent_state"),
                     }
                 )
 

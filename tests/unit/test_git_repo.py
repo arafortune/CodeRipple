@@ -69,3 +69,52 @@ class TestGitRepository:
 
         assert content1 == content2
         assert f"{commit.hexsha}:README.md" in repo._file_cache
+
+    def test_get_changed_file_states(self, test_repo):
+        """测试提取commit修改文件的最终内容"""
+        repo = GitRepository(test_repo)
+        git_repo = git.Repo(test_repo)
+
+        test_file = test_repo / "bug.py"
+        test_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        test_file.write_text("def buggy():\n    return 1 / 1\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("Fix bug")
+
+        states = repo.get_changed_file_states(fix_commit.hexsha)
+
+        assert states["bug.py"] == "def buggy():\n    return 1 / 1\n"
+
+    def test_has_equivalent_file_state(self, test_repo):
+        """测试检测目标ref是否已有相同文件最终状态"""
+        repo = GitRepository(test_repo)
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy(x):\n    return 1 / x\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        release_file = test_repo / "notes.txt"
+        release_file.write_text("release note\n")
+        git_repo.index.add(["notes.txt"])
+        git_repo.index.commit("Release-only change")
+
+        git_repo.git.checkout("master")
+        bug_file.write_text("def buggy(x):\n    if x == 0:\n        return 0\n    result = 1 / x\n    return result\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("Fix bug")
+
+        git_repo.git.checkout("release/v1.0")
+        bug_file.write_text("def buggy(x):\n    if x == 0:\n        return 0\n    return 1 / x\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Backport part 1")
+        bug_file.write_text("def buggy(x):\n    if x == 0:\n        return 0\n    result = 1 / x\n    return result\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Backport part 2")
+
+        assert repo.has_equivalent_file_state(fix_commit.hexsha, "release/v1.0") is True
