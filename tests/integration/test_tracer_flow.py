@@ -200,3 +200,39 @@ class TestTracerFlow:
         assert result.found is False
         assert result.details["reason"] == "equivalent fixed file state already exists in target ref"
         assert result.details["attempts"][0]["method"] == "commit_chain"
+
+    def test_backport_after_path_change_is_not_reported_as_affected(self, tracer, test_repo):
+        """测试主线移动文件后修复，目标版本在旧路径回补时也不应判定为受影响"""
+        git_repo = git.Repo(test_repo)
+
+        legacy_file = test_repo / "src" / "legacy.py"
+        legacy_file.parent.mkdir()
+        legacy_file.write_text("def buggy(x):\n    return 100 / x\n")
+        git_repo.index.add(["src/legacy.py"])
+        git_repo.index.commit("Introduce bug")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        release_note = test_repo / "notes.txt"
+        release_note.write_text("release note\n")
+        git_repo.index.add(["notes.txt"])
+        git_repo.index.commit("Release-only change")
+
+        git_repo.git.checkout("master")
+        new_dir = test_repo / "pkg"
+        new_dir.mkdir()
+        git_repo.git.mv("src/legacy.py", "pkg/legacy.py")
+        moved_file = test_repo / "pkg" / "legacy.py"
+        moved_file.write_text("def buggy(x):\n    if x == 0:\n        return 0\n    result = 100 / x\n    return result\n")
+        git_repo.index.add(["pkg/legacy.py"])
+        fix_commit = git_repo.index.commit("Move file and fix bug")
+
+        git_repo.git.checkout("release/v1.0")
+        legacy_file = test_repo / "src" / "legacy.py"
+        legacy_file.write_text("def buggy(x):\n    if x == 0:\n        return 0\n    result = 100 / x\n    return result\n")
+        git_repo.index.add(["src/legacy.py"])
+        git_repo.index.commit("Backport fix without moving file")
+
+        result = tracer.trace(fix_commit.hexsha, "release/v1.0")
+
+        assert result.found is False
+        assert result.details["reason"] == "equivalent fixed file state already exists in target ref"

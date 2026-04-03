@@ -2,6 +2,7 @@
 Git仓库操作封装
 """
 
+from collections import defaultdict
 from pathlib import Path
 import subprocess
 from typing import Dict, Iterator, Optional
@@ -59,7 +60,9 @@ class GitRepository:
             path = diff.b_path or diff.a_path
             if not path:
                 continue
-            states[path] = self.get_file_content(commit, path)
+            content = self.get_file_content(commit, path)
+            if content is not None:
+                states[path] = content
         return states
 
     def get_patch_id(self, commit_hash: str) -> Optional[str]:
@@ -112,8 +115,27 @@ class GitRepository:
             return False
 
         target_commit = self.get_commit(target_ref)
+        target_paths_by_name = self._group_blob_paths_by_name(target_commit)
         for path, expected_content in expected_states.items():
             actual_content = self.get_file_content(target_commit, path)
-            if actual_content != expected_content:
+            if actual_content == expected_content:
+                continue
+
+            if actual_content is not None:
+                return False
+
+            basename = Path(path).name
+            candidate_paths = target_paths_by_name.get(basename, [])
+            if not candidate_paths:
+                return False
+            if not any(self.get_file_content(target_commit, candidate_path) == expected_content for candidate_path in candidate_paths):
                 return False
         return True
+
+    def _group_blob_paths_by_name(self, commit: git.Commit) -> Dict[str, list[str]]:
+        """按文件名聚合提交树中的blob路径，用于路径迁移后的内容比对"""
+        grouped: Dict[str, list[str]] = defaultdict(list)
+        for item in commit.tree.traverse():
+            if item.type == "blob":
+                grouped[Path(item.path).name].append(item.path)
+        return dict(grouped)

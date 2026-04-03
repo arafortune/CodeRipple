@@ -324,3 +324,52 @@ class TestCLI:
         payload = json.loads(result.output)
         assert payload["affected"] is False
         assert payload["details"]["reason"] == "equivalent fixed file state already exists in target ref"
+
+    def test_trace_reports_not_affected_for_backport_after_path_change(self, runner, test_repo):
+        """测试文件移动后的修复在旧路径回补时，CLI应判定目标版本不再受影响"""
+        git_repo = git.Repo(test_repo)
+
+        legacy_file = test_repo / "src" / "legacy.py"
+        legacy_file.parent.mkdir()
+        legacy_file.write_text("def buggy(x):\n    return 100 / x\n")
+        git_repo.index.add(["src/legacy.py"])
+        git_repo.index.commit("Introduce bug")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        release_only = test_repo / "notes.txt"
+        release_only.write_text("release note\n")
+        git_repo.index.add(["notes.txt"])
+        git_repo.index.commit("Release-only change")
+
+        git_repo.git.checkout("master")
+        new_dir = test_repo / "pkg"
+        new_dir.mkdir()
+        git_repo.git.mv("src/legacy.py", "pkg/legacy.py")
+        moved_file = test_repo / "pkg" / "legacy.py"
+        moved_file.write_text("def buggy(x):\n    if x == 0:\n        return 0\n    result = 100 / x\n    return result\n")
+        git_repo.index.add(["pkg/legacy.py"])
+        fix_commit = git_repo.index.commit("Move file and fix bug")
+
+        git_repo.git.checkout("release/v1.0")
+        legacy_file = test_repo / "src" / "legacy.py"
+        legacy_file.write_text("def buggy(x):\n    if x == 0:\n        return 0\n    result = 100 / x\n    return result\n")
+        git_repo.index.add(["src/legacy.py"])
+        git_repo.index.commit("Backport fix without moving file")
+
+        result = runner.invoke(
+            cli,
+            [
+                "trace",
+                fix_commit.hexsha,
+                "release/v1.0",
+                "--repo",
+                str(test_repo),
+                "--output",
+                "json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["affected"] is False
+        assert payload["details"]["reason"] == "equivalent fixed file state already exists in target ref"

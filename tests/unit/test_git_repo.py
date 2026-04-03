@@ -118,3 +118,37 @@ class TestGitRepository:
         git_repo.index.commit("Backport part 2")
 
         assert repo.has_equivalent_file_state(fix_commit.hexsha, "release/v1.0") is True
+
+    def test_has_equivalent_file_state_after_path_change(self, test_repo):
+        """测试文件迁移后仍可按同名文件识别等价最终状态"""
+        repo = GitRepository(test_repo)
+        git_repo = git.Repo(test_repo)
+
+        legacy_file = test_repo / "src" / "legacy.py"
+        legacy_file.parent.mkdir()
+        legacy_file.write_text("def buggy(x):\n    return 100 / x\n")
+        git_repo.index.add(["src/legacy.py"])
+        git_repo.index.commit("Introduce bug")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        release_file = test_repo / "notes.txt"
+        release_file.write_text("release note\n")
+        git_repo.index.add(["notes.txt"])
+        git_repo.index.commit("Release-only change")
+
+        git_repo.git.checkout("master")
+        new_dir = test_repo / "pkg"
+        new_dir.mkdir()
+        git_repo.git.mv("src/legacy.py", "pkg/legacy.py")
+        moved_file = test_repo / "pkg" / "legacy.py"
+        moved_file.write_text("def buggy(x):\n    if x == 0:\n        return 0\n    result = 100 / x\n    return result\n")
+        git_repo.index.add(["pkg/legacy.py"])
+        fix_commit = git_repo.index.commit("Move file and fix bug")
+
+        git_repo.git.checkout("release/v1.0")
+        legacy_file = test_repo / "src" / "legacy.py"
+        legacy_file.write_text("def buggy(x):\n    if x == 0:\n        return 0\n    result = 100 / x\n    return result\n")
+        git_repo.index.add(["src/legacy.py"])
+        git_repo.index.commit("Backport fix without moving file")
+
+        assert repo.has_equivalent_file_state(fix_commit.hexsha, "release/v1.0") is True
