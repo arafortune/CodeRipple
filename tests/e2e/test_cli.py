@@ -234,3 +234,47 @@ class TestCLI:
         assert payload["affected"] is False
         assert payload["details"]["reason"] == "equivalent fix patch already exists in target ref"
         assert payload["details"]["equivalent_commit"] == git_repo.head.commit.hexsha
+
+    def test_trace_reports_affected_for_partial_backport(self, runner, test_repo):
+        """测试部分回补修复时，CLI仍应判定目标版本受影响"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy(x):\n    return 1 / x\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        release_only = test_repo / "notes.txt"
+        release_only.write_text("release note\n")
+        git_repo.index.add(["notes.txt"])
+        git_repo.index.commit("Release-only change")
+
+        git_repo.git.checkout("master")
+        bug_file.write_text("def buggy(x):\n    if x == 0:\n        return 0\n    return 1 / x\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("Fix on master")
+
+        git_repo.git.checkout("release/v1.0")
+        bug_file.write_text("def buggy(x):\n    if x < 0:\n        return 0\n    return 1 / x\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Partial backport")
+
+        result = runner.invoke(
+            cli,
+            [
+                "trace",
+                fix_commit.hexsha,
+                "release/v1.0",
+                "--repo",
+                str(test_repo),
+                "--output",
+                "json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["affected"] is True
+        assert payload["method"] == "commit_chain"
+        assert payload["details"]["reason"] == "fix commit is not reachable from target ref"
