@@ -183,3 +183,40 @@ class TestGitRepository:
         git_repo.index.commit("Backport only a.py")
 
         assert repo.has_equivalent_file_state(fix_commit.hexsha, "release/v1.0") is False
+
+    def test_has_equivalent_file_state_requires_all_files_even_with_path_change(self, test_repo):
+        """测试多文件修复中即使一个文件发生路径变化，也必须所有文件都完成回补"""
+        repo = GitRepository(test_repo)
+        git_repo = git.Repo(test_repo)
+
+        moved_source = test_repo / "src" / "a.py"
+        moved_source.parent.mkdir()
+        file_b = test_repo / "b.py"
+        moved_source.write_text("def buggy_a(x):\n    return 10 / x\n")
+        file_b.write_text("def buggy_b(x):\n    return 20 / x\n")
+        git_repo.index.add(["src/a.py", "b.py"])
+        git_repo.index.commit("Introduce bugs")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        release_file = test_repo / "notes.txt"
+        release_file.write_text("release note\n")
+        git_repo.index.add(["notes.txt"])
+        git_repo.index.commit("Release-only change")
+
+        git_repo.git.checkout("master")
+        new_dir = test_repo / "pkg"
+        new_dir.mkdir()
+        git_repo.git.mv("src/a.py", "pkg/a.py")
+        moved_target = test_repo / "pkg" / "a.py"
+        moved_target.write_text("def buggy_a(x):\n    if x == 0:\n        return 0\n    result = 10 / x\n    return result\n")
+        file_b.write_text("def buggy_b(x):\n    if x == 0:\n        return 0\n    return 20 / x\n")
+        git_repo.index.add(["pkg/a.py", "b.py"])
+        fix_commit = git_repo.index.commit("Move a.py and fix both files")
+
+        git_repo.git.checkout("release/v1.0")
+        moved_source = test_repo / "src" / "a.py"
+        moved_source.write_text("def buggy_a(x):\n    if x == 0:\n        return 0\n    result = 10 / x\n    return result\n")
+        git_repo.index.add(["src/a.py"])
+        git_repo.index.commit("Backport only moved a.py fix")
+
+        assert repo.has_equivalent_file_state(fix_commit.hexsha, "release/v1.0") is False

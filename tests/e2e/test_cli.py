@@ -420,3 +420,56 @@ class TestCLI:
         assert payload["affected"] is True
         assert payload["method"] == "commit_chain"
         assert payload["details"]["reason"] == "fix commit is not reachable from target ref"
+
+    def test_trace_reports_affected_for_mixed_multi_file_path_change_partial_backport(self, runner, test_repo):
+        """测试多文件修复中一个文件路径变化且只回补该文件时，CLI仍应判定目标版本受影响"""
+        git_repo = git.Repo(test_repo)
+
+        moved_source = test_repo / "src" / "a.py"
+        moved_source.parent.mkdir()
+        file_b = test_repo / "b.py"
+        moved_source.write_text("def buggy_a(x):\n    return 10 / x\n")
+        file_b.write_text("def buggy_b(x):\n    return 20 / x\n")
+        git_repo.index.add(["src/a.py", "b.py"])
+        git_repo.index.commit("Introduce bugs")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        release_only = test_repo / "notes.txt"
+        release_only.write_text("release note\n")
+        git_repo.index.add(["notes.txt"])
+        git_repo.index.commit("Release-only change")
+
+        git_repo.git.checkout("master")
+        new_dir = test_repo / "pkg"
+        new_dir.mkdir()
+        git_repo.git.mv("src/a.py", "pkg/a.py")
+        moved_target = test_repo / "pkg" / "a.py"
+        moved_target.write_text("def buggy_a(x):\n    if x == 0:\n        return 0\n    result = 10 / x\n    return result\n")
+        file_b.write_text("def buggy_b(x):\n    if x == 0:\n        return 0\n    return 20 / x\n")
+        git_repo.index.add(["pkg/a.py", "b.py"])
+        fix_commit = git_repo.index.commit("Move a.py and fix both files")
+
+        git_repo.git.checkout("release/v1.0")
+        moved_source = test_repo / "src" / "a.py"
+        moved_source.write_text("def buggy_a(x):\n    if x == 0:\n        return 0\n    result = 10 / x\n    return result\n")
+        git_repo.index.add(["src/a.py"])
+        git_repo.index.commit("Backport only moved a.py fix")
+
+        result = runner.invoke(
+            cli,
+            [
+                "trace",
+                fix_commit.hexsha,
+                "release/v1.0",
+                "--repo",
+                str(test_repo),
+                "--output",
+                "json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["affected"] is True
+        assert payload["method"] == "commit_chain"
+        assert payload["details"]["reason"] == "fix commit is not reachable from target ref"
