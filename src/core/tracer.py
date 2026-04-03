@@ -2,6 +2,7 @@
 Bug追溯器
 """
 
+import copy
 import re
 from typing import List
 
@@ -40,21 +41,22 @@ class BugTracer:
                 "method": result.method or self._strategy_name(strategy),
                 "found": result.found,
                 "confidence": result.confidence,
-                "details": result.details,
+                "details": copy.deepcopy(result.details),
             }
             attempts.append(attempt)
             if result.found:
                 result.details.setdefault("target_ref", target_ref)
                 result.details.setdefault("fix_commit", fix_commit)
-                result.details["attempts"] = attempts
+                result.details["attempts"] = copy.deepcopy(attempts)
                 return result
-            if result.details.get("contains_fix_commit"):
+            if result.details.get("contains_fix_commit") or result.details.get("equivalent_commit"):
                 return TraceResult.not_found(
                     {
                         "target_ref": target_ref,
                         "fix_commit": fix_commit,
-                        "attempts": attempts,
+                        "attempts": copy.deepcopy(attempts),
                         "reason": result.details["reason"],
+                        "equivalent_commit": result.details.get("equivalent_commit"),
                     }
                 )
 
@@ -62,7 +64,7 @@ class BugTracer:
             {
                 "target_ref": target_ref,
                 "fix_commit": fix_commit,
-                "attempts": attempts,
+                "attempts": copy.deepcopy(attempts),
             }
         )
 

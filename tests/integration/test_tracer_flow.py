@@ -104,3 +104,34 @@ class TestTracerFlow:
 
         assert result.found is True
         assert result.method == "commit_chain"
+
+    def test_backported_fix_is_not_reported_as_affected(self, tracer, test_repo):
+        """测试目标版本通过cherry-pick回补等价修复时不应判定为受影响"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        release_note = test_repo / "notes.txt"
+        release_note.write_text("release note\n")
+        git_repo.index.add(["notes.txt"])
+        git_repo.index.commit("Release-only change")
+
+        git_repo.git.checkout("master")
+        bug_file.write_text("def buggy():\n    return 1 / 1\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("Fix on master")
+
+        git_repo.git.checkout("release/v1.0")
+        git_repo.git.cherry_pick(fix_commit.hexsha)
+        backport_commit = git_repo.head.commit.hexsha
+
+        result = tracer.trace(fix_commit.hexsha, "release/v1.0")
+
+        assert result.found is False
+        assert result.details["reason"] == "equivalent fix patch already exists in target ref"
+        assert result.details["equivalent_commit"] == backport_commit
+        assert result.details["attempts"][0]["method"] == "commit_chain"
