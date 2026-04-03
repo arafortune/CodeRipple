@@ -8,6 +8,8 @@ import subprocess
 from typing import Dict, Iterator, Optional
 
 import git
+from src.parser.ast import ASTParser
+from src.parser.normalizer import ASTNormalizer
 
 
 class GitRepository:
@@ -19,6 +21,8 @@ class GitRepository:
         self._commit_cache: Dict[str, git.Commit] = {}
         self._file_cache: Dict[str, Optional[str]] = {}
         self._patch_id_cache: Dict[str, Optional[str]] = {}
+        self._ast_parser = ASTParser("python")
+        self._ast_normalizer = ASTNormalizer()
 
     def get_commit(self, commit_hash: str) -> git.Commit:
         """获取commit对象"""
@@ -132,6 +136,36 @@ class GitRepository:
                 return False
         return True
 
+    def has_equivalent_ast_state(self, commit_hash: str, target_ref: str) -> bool:
+        """检查单文件修复在目标ref中是否存在AST标准化后等价的最终状态"""
+        expected_states = self.get_changed_file_states(commit_hash)
+        if len(expected_states) != 1:
+            return False
+
+        path, expected_content = next(iter(expected_states.items()))
+        if not self._is_code_file(path):
+            return False
+        expected_fingerprint = self._ast_fingerprint(expected_content)
+        if not expected_fingerprint:
+            return False
+
+        target_commit = self.get_commit(target_ref)
+        candidate_paths = [path]
+        if self.get_file_content(target_commit, path) is None:
+            candidate_paths.extend(self._group_blob_paths_by_name(target_commit).get(Path(path).name, []))
+
+        seen_paths = set()
+        for candidate_path in candidate_paths:
+            if candidate_path in seen_paths:
+                continue
+            seen_paths.add(candidate_path)
+            candidate_content = self.get_file_content(target_commit, candidate_path)
+            if not candidate_content:
+                continue
+            if self._ast_fingerprint(candidate_content) == expected_fingerprint:
+                return True
+        return False
+
     def _group_blob_paths_by_name(self, commit: git.Commit) -> Dict[str, list[str]]:
         """按文件名聚合提交树中的blob路径，用于路径迁移后的内容比对"""
         grouped: Dict[str, list[str]] = defaultdict(list)
@@ -139,3 +173,19 @@ class GitRepository:
             if item.type == "blob":
                 grouped[Path(item.path).name].append(item.path)
         return dict(grouped)
+
+    def _ast_fingerprint(self, content: Optional[str]) -> Optional[str]:
+        """生成代码内容的AST标准化指纹"""
+        if not content:
+            return None
+        try:
+            parsed = self._ast_parser.parse(content)
+            if parsed is None:
+                return None
+            return self._ast_normalizer.normalize(parsed).fingerprint
+        except Exception:
+            return None
+
+    def _is_code_file(self, path: str) -> bool:
+        """检查路径是否属于当前支持的代码文件类型"""
+        return Path(path).suffix in {".py", ".c", ".cpp", ".h", ".java", ".go", ".js", ".ts"}

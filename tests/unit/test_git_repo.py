@@ -220,3 +220,31 @@ class TestGitRepository:
         git_repo.index.commit("Backport only moved a.py fix")
 
         assert repo.has_equivalent_file_state(fix_commit.hexsha, "release/v1.0") is False
+
+    def test_has_equivalent_ast_state_for_single_file_refactor(self, test_repo):
+        """测试单文件轻微重构回补可通过AST标准化识别为等价"""
+        repo = GitRepository(test_repo)
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy(x):\n    return 10 / x\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        release_file = test_repo / "notes.txt"
+        release_file.write_text("release note\n")
+        git_repo.index.add(["notes.txt"])
+        git_repo.index.commit("Release-only change")
+
+        git_repo.git.checkout("master")
+        bug_file.write_text("def buggy(x):\n    if x == 0:\n        return 0\n    result = 10 / x\n    return result\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("Fix bug")
+
+        git_repo.git.checkout("release/v1.0")
+        bug_file.write_text("def buggy(value):\n    if value == 0:\n        return 0\n    quotient = 10 / value\n    return quotient\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Equivalent refactor backport")
+
+        assert repo.has_equivalent_ast_state(fix_commit.hexsha, "release/v1.0") is True

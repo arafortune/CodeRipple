@@ -53,6 +53,7 @@ class BugTracer:
                 result.details.get("contains_fix_commit")
                 or result.details.get("equivalent_commit")
                 or result.details.get("equivalent_state")
+                or result.details.get("equivalent_ast_state")
             ):
                 return TraceResult.not_found(
                     {
@@ -62,6 +63,7 @@ class BugTracer:
                         "reason": result.details["reason"],
                         "equivalent_commit": result.details.get("equivalent_commit"),
                         "equivalent_state": result.details.get("equivalent_state"),
+                        "equivalent_ast_state": result.details.get("equivalent_ast_state"),
                     }
                 )
 

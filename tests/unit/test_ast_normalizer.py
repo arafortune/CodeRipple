@@ -64,3 +64,25 @@ def func2(b):
         norm2 = normalizer.normalize(ast2)
         
         assert norm1.fingerprint == norm2.fingerprint
+
+    def test_different_constants_have_different_fingerprints(self, parser, normalizer):
+        """测试常量值差异会反映到指纹中"""
+        code1 = """
+def func(a):
+    if a == 0:
+        return 0
+    return 1
+"""
+        code2 = """
+def func(a):
+    if a == 1:
+        return 0
+    return 1
+"""
+        ast1 = parser.parse(code1)
+        ast2 = parser.parse(code2)
+
+        norm1 = normalizer.normalize(ast1)
+        norm2 = normalizer.normalize(ast2)
+
+        assert norm1.fingerprint != norm2.fingerprint

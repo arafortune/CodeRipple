@@ -473,3 +473,46 @@ class TestCLI:
         assert payload["affected"] is True
         assert payload["method"] == "commit_chain"
         assert payload["details"]["reason"] == "fix commit is not reachable from target ref"
+
+    def test_trace_reports_not_affected_for_single_file_equivalent_refactor_backport(self, runner, test_repo):
+        """测试单文件语义等价但文本不同的回补时，CLI应判定目标版本不再受影响"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy(x):\n    return 10 / x\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        release_only = test_repo / "notes.txt"
+        release_only.write_text("release note\n")
+        git_repo.index.add(["notes.txt"])
+        git_repo.index.commit("Release-only change")
+
+        git_repo.git.checkout("master")
+        bug_file.write_text("def buggy(x):\n    if x == 0:\n        return 0\n    result = 10 / x\n    return result\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("Fix bug")
+
+        git_repo.git.checkout("release/v1.0")
+        bug_file.write_text("def buggy(value):\n    if value == 0:\n        return 0\n    quotient = 10 / value\n    return quotient\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Equivalent refactor backport")
+
+        result = runner.invoke(
+            cli,
+            [
+                "trace",
+                fix_commit.hexsha,
+                "release/v1.0",
+                "--repo",
+                str(test_repo),
+                "--output",
+                "json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["affected"] is False
+        assert payload["details"]["reason"] == "equivalent fixed AST state already exists in target ref"

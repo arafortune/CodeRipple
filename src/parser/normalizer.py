@@ -54,6 +54,15 @@ class ASTNormalizer:
                 self.var_map[func_name] = f"f{self.var_counter}"
                 self.var_counter += 1
             metadata["name"] = self.var_map[func_name]
+        if node.type == "FunctionDef" and "params" in metadata:
+            normalized_params = []
+            for param_name in metadata["params"]:
+                param_name = str(param_name)
+                if param_name not in self.var_map:
+                    self.var_map[param_name] = f"v{self.var_counter}"
+                    self.var_counter += 1
+                normalized_params.append(self.var_map[param_name])
+            metadata["params"] = normalized_params
 
         normalized_children = [self._normalize_node(child) for child in node.children]
 
@@ -64,5 +73,8 @@ class ASTNormalizer:
         if node is None:
             return "none"
 
+        metadata_items = ",".join(
+            f"{key}={repr(node.metadata[key])}" for key in sorted(node.metadata)
+        )
         child_fingerprints = [self._generate_fingerprint(child) for child in node.children]
-        return f"{node.type}({','.join(child_fingerprints)})"
+        return f"{node.type}[{metadata_items}]({','.join(child_fingerprints)})"
