@@ -152,3 +152,34 @@ class TestGitRepository:
         git_repo.index.commit("Backport fix without moving file")
 
         assert repo.has_equivalent_file_state(fix_commit.hexsha, "release/v1.0") is True
+
+    def test_has_equivalent_file_state_requires_all_changed_files(self, test_repo):
+        """测试多文件修复时必须所有相关文件都达到相同最终状态"""
+        repo = GitRepository(test_repo)
+        git_repo = git.Repo(test_repo)
+
+        file_a = test_repo / "a.py"
+        file_b = test_repo / "b.py"
+        file_a.write_text("def buggy_a(x):\n    return 10 / x\n")
+        file_b.write_text("def buggy_b(x):\n    return 20 / x\n")
+        git_repo.index.add(["a.py", "b.py"])
+        git_repo.index.commit("Introduce bugs")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        release_file = test_repo / "notes.txt"
+        release_file.write_text("release note\n")
+        git_repo.index.add(["notes.txt"])
+        git_repo.index.commit("Release-only change")
+
+        git_repo.git.checkout("master")
+        file_a.write_text("def buggy_a(x):\n    if x == 0:\n        return 0\n    return 10 / x\n")
+        file_b.write_text("def buggy_b(x):\n    if x == 0:\n        return 0\n    return 20 / x\n")
+        git_repo.index.add(["a.py", "b.py"])
+        fix_commit = git_repo.index.commit("Fix both files")
+
+        git_repo.git.checkout("release/v1.0")
+        file_a.write_text("def buggy_a(x):\n    if x == 0:\n        return 0\n    return 10 / x\n")
+        git_repo.index.add(["a.py"])
+        git_repo.index.commit("Backport only a.py")
+
+        assert repo.has_equivalent_file_state(fix_commit.hexsha, "release/v1.0") is False
