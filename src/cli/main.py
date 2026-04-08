@@ -15,7 +15,7 @@ from src.git.repo import GitRepository
 @click.group()
 @click.version_option(version="0.1.0")
 def cli():
-    """CodeRipple - Git历史分析工具"""
+    """CodeRipple - Git历史分析工具。分析目标版本是否仍受某个修复提交对应的Bug影响。"""
     return None
 
 
@@ -158,15 +158,23 @@ def _trace_command(
 @cli.command(name="trace")
 @click.argument("fix_commit", metavar="fix_commit", required=False)
 @click.argument("target", metavar="target", required=False)
-@click.option("--fix", "fix_option")
-@click.option("--fix-message")
-@click.option("--target", "target_option")
-@click.option("--repo", "-r", default=".")
-@click.option("--config", "-c", default="config/coderipple.yaml")
-@click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]))
+@click.option("--fix", "fix_option", help="显式指定修复commit，可替代位置参数 <fix_commit>")
+@click.option("--fix-message", help="按提交信息搜索修复commit，例如 --fix-message 'divide by zero'")
+@click.option("--target", "target_option", help="目标分支、tag或commit，可替代位置参数 <target>")
+@click.option("--repo", "-r", default=".", help="目标Git仓库路径，默认当前目录")
+@click.option("--config", "-c", default="config/coderipple.yaml", help="配置文件路径")
+@click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式")
 @click.option("--explain", is_flag=True, help="输出结构化分析过程")
 def trace(fix_commit, target, fix_option, fix_message, target_option, repo, config, output, explain):
-    """追溯bug是否影响目标版本"""
+    """追溯目标版本是否仍受某个修复提交对应的Bug影响。
+
+    支持旧用法：
+      coderipple trace <fix_commit> <target>
+
+    也支持显式参数：
+      coderipple trace --fix <fix_commit> --target <target>
+      coderipple trace --fix-message "<message>" --target <target>
+    """
     try:
         _trace_command(
             fix_commit,
@@ -189,15 +197,15 @@ def trace(fix_commit, target, fix_option, fix_message, target_option, repo, conf
 @cli.command(name="affected")
 @click.argument("fix_commit", metavar="fix_commit", required=False)
 @click.argument("target", metavar="target", required=False)
-@click.option("--fix", "fix_option")
-@click.option("--fix-message")
-@click.option("--target", "target_option")
-@click.option("--repo", "-r", default=".")
-@click.option("--config", "-c", default="config/coderipple.yaml")
-@click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]))
+@click.option("--fix", "fix_option", help="显式指定修复commit，可替代位置参数 <fix_commit>")
+@click.option("--fix-message", help="按提交信息搜索修复commit，例如 --fix-message 'divide by zero'")
+@click.option("--target", "target_option", help="目标分支、tag或commit，可替代位置参数 <target>")
+@click.option("--repo", "-r", default=".", help="目标Git仓库路径，默认当前目录")
+@click.option("--config", "-c", default="config/coderipple.yaml", help="配置文件路径")
+@click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式")
 @click.option("--explain", is_flag=True, help="输出结构化分析过程")
 def affected(fix_commit, target, fix_option, fix_message, target_option, repo, config, output, explain):
-    """`trace` 的直观别名，直接表达目标版本是否受影响"""
+    """`trace` 的直观别名，直接表达目标版本是否受影响。"""
     try:
         _trace_command(
             fix_commit,
