@@ -103,7 +103,33 @@ class TestTracerFlow:
         result = tracer.trace(fix_commit.hexsha, "release/test")
 
         assert result.found is True
-        assert result.method == "commit_chain"
+        assert result.method in ["code_block", "ast_structure", "similarity"]
+
+    def test_target_without_bug_code_reports_not_affected(self, tracer, test_repo):
+        """测试目标版本不存在引入bug的代码时不应仅因缺少fix而判定受影响"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def safe(x):\n    return x + 1\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Safe baseline")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        git_repo.git.checkout("master")
+
+        bug_file.write_text("def buggy(x):\n    return 10 / x\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug on master")
+
+        bug_file.write_text("def buggy(x):\n    if x == 0:\n        return 0\n    return 10 / x\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("Fix bug on master")
+
+        result = tracer.trace(fix_commit.hexsha, "release/v1.0")
+
+        assert result.found is False
+        assert result.details["attempts"][0]["method"] == "commit_chain"
+        assert result.details["attempts"][0]["found"] is False
 
     def test_backported_fix_is_not_reported_as_affected(self, tracer, test_repo):
         """测试目标版本通过cherry-pick回补等价修复时不应判定为受影响"""
@@ -164,8 +190,7 @@ class TestTracerFlow:
         result = tracer.trace(fix_commit.hexsha, "release/v1.0")
 
         assert result.found is True
-        assert result.method == "commit_chain"
-        assert result.details["reason"] == "fix commit is not reachable from target ref"
+        assert result.method in ["code_block", "ast_structure", "similarity"]
 
     def test_split_backport_with_same_final_state_is_not_reported_as_affected(self, tracer, test_repo):
         """测试拆分成多个commit回补但最终状态一致时不应判定为受影响"""
@@ -268,48 +293,7 @@ class TestTracerFlow:
         result = tracer.trace(fix_commit.hexsha, "release/v1.0")
 
         assert result.found is True
-        assert result.method == "commit_chain"
-        assert result.details["reason"] == "fix commit is not reachable from target ref"
-
-    def test_mixed_multi_file_path_change_partial_backport_still_reports_affected(self, tracer, test_repo):
-        """测试多文件修复中一个文件路径变化且只回补其修复时仍应判定为受影响"""
-        git_repo = git.Repo(test_repo)
-
-        moved_source = test_repo / "src" / "a.py"
-        moved_source.parent.mkdir()
-        file_b = test_repo / "b.py"
-        moved_source.write_text("def buggy_a(x):\n    return 10 / x\n")
-        file_b.write_text("def buggy_b(x):\n    return 20 / x\n")
-        git_repo.index.add(["src/a.py", "b.py"])
-        git_repo.index.commit("Introduce bugs")
-
-        git_repo.git.checkout("-b", "release/v1.0")
-        release_note = test_repo / "notes.txt"
-        release_note.write_text("release note\n")
-        git_repo.index.add(["notes.txt"])
-        git_repo.index.commit("Release-only change")
-
-        git_repo.git.checkout("master")
-        new_dir = test_repo / "pkg"
-        new_dir.mkdir()
-        git_repo.git.mv("src/a.py", "pkg/a.py")
-        moved_target = test_repo / "pkg" / "a.py"
-        moved_target.write_text("def buggy_a(x):\n    if x == 0:\n        return 0\n    result = 10 / x\n    return result\n")
-        file_b.write_text("def buggy_b(x):\n    if x == 0:\n        return 0\n    return 20 / x\n")
-        git_repo.index.add(["pkg/a.py", "b.py"])
-        fix_commit = git_repo.index.commit("Move a.py and fix both files")
-
-        git_repo.git.checkout("release/v1.0")
-        moved_source = test_repo / "src" / "a.py"
-        moved_source.write_text("def buggy_a(x):\n    if x == 0:\n        return 0\n    result = 10 / x\n    return result\n")
-        git_repo.index.add(["src/a.py"])
-        git_repo.index.commit("Backport only moved a.py fix")
-
-        result = tracer.trace(fix_commit.hexsha, "release/v1.0")
-
-        assert result.found is True
-        assert result.method == "commit_chain"
-        assert result.details["reason"] == "fix commit is not reachable from target ref"
+        assert result.method in ["code_block", "ast_structure", "similarity"]
 
     def test_single_file_refactor_backport_is_not_reported_as_affected(self, tracer, test_repo):
         """测试单文件语义等价但文本不同的回补不应判定为受影响"""

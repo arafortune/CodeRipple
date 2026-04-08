@@ -35,8 +35,8 @@ class TestCommitChainStrategy:
         assert result.found is False
         assert result.details["reason"] == "fix commit is already contained in target ref"
 
-    def test_trace_found_when_fix_not_in_target(self, strategy, test_repo):
-        """测试目标版本尚未包含修复commit时判定为受影响"""
+    def test_trace_not_found_when_fix_not_in_target(self, strategy, test_repo):
+        """测试目标版本未包含修复commit时commit链策略只能返回未确定"""
         git_repo = git.Repo(test_repo)
 
         git_repo.git.checkout("-b", "release/v1.0")
@@ -52,10 +52,10 @@ class TestCommitChainStrategy:
 
         result = strategy.trace(fix_commit.hexsha, "release/v1.0")
 
-        assert result.found is True
-        assert result.commit == fix_commit.hexsha
-        assert result.method == "commit_chain"
-        assert result.confidence == 1.0
+        assert result.found is False
+        assert result.commit is None
+        assert result.method is None
+        assert result.confidence == 0.0
         assert result.details["reason"] == "fix commit is not reachable from target ref"
 
     def test_trace_not_found(self, strategy, test_repo):
@@ -79,8 +79,8 @@ class TestCommitChainStrategy:
         assert result.confidence == 0.0
         assert result.details["reason"] == "fix commit is already contained in target ref"
 
-    def test_trace_reports_affected_for_diverged_branch(self, strategy, test_repo):
-        """测试分叉分支未包含修复时仍判定受影响"""
+    def test_trace_reports_not_found_for_diverged_branch(self, strategy, test_repo):
+        """测试分叉分支未包含修复时commit链策略返回未确定"""
         git_repo = git.Repo(test_repo)
 
         git_repo.git.checkout("-b", "feature")
@@ -97,9 +97,8 @@ class TestCommitChainStrategy:
 
         result = strategy.trace(fix_commit.hexsha, "feature")
 
-        assert result.found is True
-        assert result.method == "commit_chain"
-        assert result.commit == fix_commit.hexsha
+        assert result.found is False
+        assert result.details["reason"] == "fix commit is not reachable from target ref"
     
     def test_priority(self, strategy):
         assert strategy.priority == 1

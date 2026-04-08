@@ -25,12 +25,8 @@ class CommitChainStrategy(TraceStrategy):
         )
 
         if not is_ancestor and not equivalent_commit and not equivalent_state and not equivalent_ast_state:
-            return TraceResult(
-                found=True,
-                commit=fix_commit_obj.hexsha,
-                method="commit_chain",
-                confidence=1.0,
-                details={"reason": "fix commit is not reachable from target ref"},
+            return TraceResult.not_found(
+                {"reason": "fix commit is not reachable from target ref"}
             )
 
         return TraceResult.not_found(

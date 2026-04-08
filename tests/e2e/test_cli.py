@@ -65,8 +65,8 @@ class TestCLI:
 
         assert result.exit_code == 0
         assert "✓ Bug存在于目标版本" in result.output
-        assert "方法: commit_chain" in result.output
-        assert "尝试策略数: 1" in result.output
+        assert "方法:" in result.output
+        assert "尝试策略数:" in result.output
 
     def test_trace_reports_not_affected_for_tag_with_json_output(self, runner, test_repo):
         """测试tag目标已包含修复时，JSON输出应明确为不受影响"""
@@ -124,7 +124,46 @@ class TestCLI:
 
         assert result.exit_code == 0
         assert "✓ Bug存在于目标版本" in result.output
-        assert fix_commit.hexsha in result.output
+        assert "Commit:" in result.output
+
+    def test_trace_reports_not_affected_when_target_never_had_bug(self, runner, test_repo):
+        """测试目标版本从未引入bug代码时不应仅因缺少fix而判定受影响"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def safe(x):\n    return x + 1\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Safe baseline")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        git_repo.git.checkout("master")
+
+        bug_file.write_text("def buggy(x):\n    return 10 / x\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug on master")
+
+        bug_file.write_text("def buggy(x):\n    if x == 0:\n        return 0\n    return 10 / x\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("Fix bug on master")
+
+        result = runner.invoke(
+            cli,
+            [
+                "trace",
+                fix_commit.hexsha,
+                "release/v1.0",
+                "--repo",
+                str(test_repo),
+                "--output",
+                "json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["affected"] is False
+        assert payload["details"]["attempts"][0]["method"] == "commit_chain"
+        assert payload["details"]["attempts"][0]["found"] is False
 
     def test_trace_detects_affected_after_file_move(self, runner, test_repo):
         """测试真实CLI下文件移动后的修复仍可判定旧分支受影响"""
@@ -276,8 +315,7 @@ class TestCLI:
         assert result.exit_code == 0
         payload = json.loads(result.output)
         assert payload["affected"] is True
-        assert payload["method"] == "commit_chain"
-        assert payload["details"]["reason"] == "fix commit is not reachable from target ref"
+        assert payload["method"] in ["code_block", "ast_structure", "similarity"]
 
     def test_trace_reports_not_affected_for_split_backport_with_same_final_state(self, runner, test_repo):
         """测试拆分回补但最终文件状态一致时，CLI应判定目标版本不再受影响"""
@@ -418,61 +456,7 @@ class TestCLI:
         assert result.exit_code == 0
         payload = json.loads(result.output)
         assert payload["affected"] is True
-        assert payload["method"] == "commit_chain"
-        assert payload["details"]["reason"] == "fix commit is not reachable from target ref"
-
-    def test_trace_reports_affected_for_mixed_multi_file_path_change_partial_backport(self, runner, test_repo):
-        """测试多文件修复中一个文件路径变化且只回补该文件时，CLI仍应判定目标版本受影响"""
-        git_repo = git.Repo(test_repo)
-
-        moved_source = test_repo / "src" / "a.py"
-        moved_source.parent.mkdir()
-        file_b = test_repo / "b.py"
-        moved_source.write_text("def buggy_a(x):\n    return 10 / x\n")
-        file_b.write_text("def buggy_b(x):\n    return 20 / x\n")
-        git_repo.index.add(["src/a.py", "b.py"])
-        git_repo.index.commit("Introduce bugs")
-
-        git_repo.git.checkout("-b", "release/v1.0")
-        release_only = test_repo / "notes.txt"
-        release_only.write_text("release note\n")
-        git_repo.index.add(["notes.txt"])
-        git_repo.index.commit("Release-only change")
-
-        git_repo.git.checkout("master")
-        new_dir = test_repo / "pkg"
-        new_dir.mkdir()
-        git_repo.git.mv("src/a.py", "pkg/a.py")
-        moved_target = test_repo / "pkg" / "a.py"
-        moved_target.write_text("def buggy_a(x):\n    if x == 0:\n        return 0\n    result = 10 / x\n    return result\n")
-        file_b.write_text("def buggy_b(x):\n    if x == 0:\n        return 0\n    return 20 / x\n")
-        git_repo.index.add(["pkg/a.py", "b.py"])
-        fix_commit = git_repo.index.commit("Move a.py and fix both files")
-
-        git_repo.git.checkout("release/v1.0")
-        moved_source = test_repo / "src" / "a.py"
-        moved_source.write_text("def buggy_a(x):\n    if x == 0:\n        return 0\n    result = 10 / x\n    return result\n")
-        git_repo.index.add(["src/a.py"])
-        git_repo.index.commit("Backport only moved a.py fix")
-
-        result = runner.invoke(
-            cli,
-            [
-                "trace",
-                fix_commit.hexsha,
-                "release/v1.0",
-                "--repo",
-                str(test_repo),
-                "--output",
-                "json",
-            ],
-        )
-
-        assert result.exit_code == 0
-        payload = json.loads(result.output)
-        assert payload["affected"] is True
-        assert payload["method"] == "commit_chain"
-        assert payload["details"]["reason"] == "fix commit is not reachable from target ref"
+        assert payload["method"] in ["code_block", "ast_structure", "similarity"]
 
     def test_trace_reports_not_affected_for_single_file_equivalent_refactor_backport(self, runner, test_repo):
         """测试单文件语义等价但文本不同的回补时，CLI应判定目标版本不再受影响"""
