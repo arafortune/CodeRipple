@@ -53,6 +53,17 @@ class GitRepository:
         """迭代commit"""
         return self.repo.iter_commits(ref, max_count=max_count)
 
+    def find_commit_by_message(self, query: str, max_count: int = 500) -> Optional[git.Commit]:
+        """按提交信息搜索最近的commit"""
+        normalized_query = query.strip().lower()
+        if not normalized_query:
+            return None
+
+        for commit in self.repo.iter_commits("--all", max_count=max_count):
+            if normalized_query in commit.message.lower():
+                return commit
+        return None
+
     def get_changed_file_states(self, commit_hash: str) -> Dict[str, Optional[str]]:
         """获取commit直接修改的文件在该commit中的最终内容"""
         commit = self.get_commit(commit_hash)
