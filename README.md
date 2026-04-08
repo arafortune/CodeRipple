@@ -30,6 +30,9 @@ uv run coderipple affected --fix <fix_commit> --target <branch_or_tag_or_commit>
 # 按提交信息搜索修复commit
 uv run coderipple trace --fix-message "<message>" --target <branch_or_tag_or_commit>
 
+# 列出提交信息命中的候选修复提交
+uv run coderipple trace --fix-message "<message>" --list-fix-candidates --target <branch_or_tag_or_commit>
+
 # 批量分析多个目标版本
 uv run coderipple affected --fix <fix_commit> --target <ref1> --target <ref2>
 uv run coderipple affected --fix <fix_commit> --targets-file targets.txt
@@ -47,6 +50,10 @@ uv run coderipple trace abc123 v1.0.0
 # 按提交信息搜索修复commit
 uv run coderipple trace --fix-message "divide by zero" --target release/v1.0
 
+# 当fix-message命中多个候选时，先列候选，再按序号选择
+uv run coderipple trace --fix-message "divide by zero" --list-fix-candidates --target release/v1.0
+uv run coderipple trace --fix-message "divide by zero" --fix-index 2 --target release/v1.0
+
 # 批量分析多个目标版本
 uv run coderipple affected --fix abc123 --target release/v1.0 --target v1.0.1
 
@@ -62,6 +69,8 @@ uv run coderipple trace --fix abc123 --target v1.0.0 --output json --explain
 ```bash
 --fix           显式指定修复commit
 --fix-message   按提交信息搜索修复commit
+--fix-index     当 --fix-message 命中多个候选时，选择第几个候选
+--list-fix-candidates  仅列出 --fix-message 命中的候选提交
 --target        指定目标分支、tag或commit，可重复传入
 --targets-file  从文件读取多个目标版本，每行一个ref
 --repo          指定目标仓库路径

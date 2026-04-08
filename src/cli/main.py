@@ -100,6 +100,8 @@ def _resolve_fix_and_target(
     fix_option: Optional[str],
     target_option: Optional[str],
     fix_message: Optional[str],
+    fix_index: int,
+    list_fix_candidates: bool,
 ) -> tuple[str, str, Optional[str]]:
     git_repo = GitRepository(repo)
     resolved_target = target_option or target
@@ -116,15 +118,29 @@ def _resolve_fix_and_target(
 
     resolved_from_message = None
     if fix_message:
-        matched_commits = git_repo.find_commits_by_message(fix_message)
+        matched_commits = git_repo.rank_commits_for_fix_message(
+            git_repo.find_commits_by_message(fix_message),
+            fix_message,
+            resolved_target,
+        )
         if not matched_commits:
             raise click.UsageError(f"未找到提交信息包含 {fix_message!r} 的commit")
-        if len(matched_commits) > 1:
-            candidates = ", ".join(commit.hexsha[:8] for commit in matched_commits[:3])
+        if list_fix_candidates:
+            raise click.ClickException(_format_fix_candidates_message(fix_message, matched_commits))
+        if fix_index != 0 and (fix_index < 1 or fix_index > len(matched_commits)):
             raise click.UsageError(
-                f"--fix-message {fix_message!r} 命中多个commit，请改用 --fix 指定。候选: {candidates}"
+                f"--fix-index 必须落在 1 到 {len(matched_commits)} 之间，当前为 {fix_index}"
             )
-        resolved_fix = matched_commits[0].hexsha
+        if len(matched_commits) > 1 and fix_index == 0:
+            candidates = ", ".join(
+                f"{idx}:{commit.hexsha[:8]}"
+                for idx, commit in enumerate(matched_commits[:3], start=1)
+            )
+            raise click.UsageError(
+                f"--fix-message {fix_message!r} 命中多个commit，请用 --fix-index 选择。候选: {candidates}"
+            )
+        selected_index = 1 if fix_index == 0 else fix_index
+        resolved_fix = matched_commits[selected_index - 1].hexsha
         resolved_from_message = fix_message
     else:
         resolved_fix = fix_option or fix_commit
@@ -134,6 +150,16 @@ def _resolve_fix_and_target(
             raise click.UsageError(f"修复提交 {resolved_fix!r} 不存在或无法解析") from None
 
     return resolved_fix, resolved_target, resolved_from_message
+
+
+def _format_fix_candidates_message(fix_message: str, matched_commits: list[git.Commit]) -> str:
+    lines = [f"fix-message {fix_message!r} 的候选提交:"]
+    for idx, commit in enumerate(matched_commits[:10], start=1):
+        lines.append(f"{idx}. {commit.hexsha[:8]} {commit.summary}")
+    if len(matched_commits) > 10:
+        lines.append(f"... 其余 {len(matched_commits) - 10} 个候选未显示")
+    lines.append("使用 --fix-index <n> 选择候选，或改用 --fix 直接指定 commit。")
+    return "\n".join(lines)
 
 
 def _resolve_targets(
@@ -180,6 +206,7 @@ def _doctor_command(
     fix_message: Optional[str],
     repo: str,
     output: str,
+    fix_index: int,
 ) -> None:
     git_repo = GitRepository(repo)
     repo_path = str(git_repo.repo_path)
@@ -206,14 +233,21 @@ def _doctor_command(
     if fix_message:
         diagnostics["fix"]["input"] = fix_message
         diagnostics["fix"]["mode"] = "message"
-        matches = git_repo.find_commits_by_message(fix_message)
+        matches = git_repo.rank_commits_for_fix_message(
+            git_repo.find_commits_by_message(fix_message),
+            fix_message,
+            raw_target,
+        )
         diagnostics["fix"]["candidates"] = [
             {"commit": commit.hexsha, "summary": commit.summary} for commit in matches[:5]
         ]
         if len(matches) == 1:
             diagnostics["fix"].update({"ok": True, "resolved": matches[0].hexsha})
         elif len(matches) > 1:
-            diagnostics["fix"]["error"] = "提交信息命中多个候选，请改用 --fix"
+            if 1 <= fix_index <= len(matches):
+                diagnostics["fix"].update({"ok": True, "resolved": matches[fix_index - 1].hexsha})
+            else:
+                diagnostics["fix"]["error"] = "提交信息命中多个候选，请使用 --fix-index 选择"
         else:
             diagnostics["fix"]["error"] = "未找到匹配的修复提交"
     elif raw_fix:
@@ -308,10 +342,19 @@ def _trace_command(
     config: str,
     output: str,
     explain: bool,
+    fix_index: int,
+    list_fix_candidates: bool,
 ) -> None:
     resolved_targets = _resolve_targets(repo, target, target_options, targets_file)
     resolved_fix, _, resolved_from_message = _resolve_fix_and_target(
-        repo, fix_commit, resolved_targets[0], fix_option, resolved_targets[0], fix_message
+        repo,
+        fix_commit,
+        resolved_targets[0],
+        fix_option,
+        resolved_targets[0],
+        fix_message,
+        fix_index,
+        list_fix_candidates,
     )
     config_obj = Config.from_file(config)
     tracer = BugTracer(config_obj, repo)
@@ -384,13 +427,28 @@ def _trace_command(
 @click.argument("target", metavar="target", required=False)
 @click.option("--fix", "fix_option", help="显式指定修复commit，可替代位置参数 <fix_commit>")
 @click.option("--fix-message", help="按提交信息搜索修复commit，例如 --fix-message 'divide by zero'")
+@click.option("--fix-index", default=0, type=int, help="当 --fix-message 命中多个候选时，选择第几个候选")
+@click.option("--list-fix-candidates", is_flag=True, help="仅列出 --fix-message 命中的候选提交，不执行trace")
 @click.option("--target", "target_options", multiple=True, help="目标分支、tag或commit，可重复传入以批量分析")
 @click.option("--targets-file", help="从文件读取多个目标版本，每行一个ref，支持#注释")
 @click.option("--repo", "-r", default=".", help="目标Git仓库路径，默认当前目录")
 @click.option("--config", "-c", default="config/coderipple.yaml", help="配置文件路径")
 @click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式")
 @click.option("--explain", is_flag=True, help="输出结构化分析过程")
-def trace(fix_commit, target, fix_option, fix_message, target_options, targets_file, repo, config, output, explain):
+def trace(
+    fix_commit,
+    target,
+    fix_option,
+    fix_message,
+    fix_index,
+    list_fix_candidates,
+    target_options,
+    targets_file,
+    repo,
+    config,
+    output,
+    explain,
+):
     """追溯目标版本是否仍受某个修复提交对应的Bug影响。
 
     支持旧用法：
@@ -413,6 +471,8 @@ def trace(fix_commit, target, fix_option, fix_message, target_options, targets_f
             config,
             output,
             explain,
+            fix_index,
+            list_fix_candidates,
         )
     except click.ClickException:
         raise
@@ -426,13 +486,28 @@ def trace(fix_commit, target, fix_option, fix_message, target_options, targets_f
 @click.argument("target", metavar="target", required=False)
 @click.option("--fix", "fix_option", help="显式指定修复commit，可替代位置参数 <fix_commit>")
 @click.option("--fix-message", help="按提交信息搜索修复commit，例如 --fix-message 'divide by zero'")
+@click.option("--fix-index", default=0, type=int, help="当 --fix-message 命中多个候选时，选择第几个候选")
+@click.option("--list-fix-candidates", is_flag=True, help="仅列出 --fix-message 命中的候选提交，不执行trace")
 @click.option("--target", "target_options", multiple=True, help="目标分支、tag或commit，可重复传入以批量分析")
 @click.option("--targets-file", help="从文件读取多个目标版本，每行一个ref，支持#注释")
 @click.option("--repo", "-r", default=".", help="目标Git仓库路径，默认当前目录")
 @click.option("--config", "-c", default="config/coderipple.yaml", help="配置文件路径")
 @click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式")
 @click.option("--explain", is_flag=True, help="输出结构化分析过程")
-def affected(fix_commit, target, fix_option, fix_message, target_options, targets_file, repo, config, output, explain):
+def affected(
+    fix_commit,
+    target,
+    fix_option,
+    fix_message,
+    fix_index,
+    list_fix_candidates,
+    target_options,
+    targets_file,
+    repo,
+    config,
+    output,
+    explain,
+):
     """`trace` 的直观别名，直接表达目标版本是否受影响。"""
     try:
         _trace_command(
@@ -446,6 +521,8 @@ def affected(fix_commit, target, fix_option, fix_message, target_options, target
             config,
             output,
             explain,
+            fix_index,
+            list_fix_candidates,
         )
     except click.ClickException:
         raise
@@ -459,10 +536,11 @@ def affected(fix_commit, target, fix_option, fix_message, target_options, target
 @click.argument("target", metavar="target", required=False)
 @click.option("--fix", "fix_option", help="显式指定修复commit，可替代位置参数 <fix_commit>")
 @click.option("--fix-message", help="按提交信息搜索修复commit，并检测是否存在多候选")
+@click.option("--fix-index", default=0, type=int, help="当 --fix-message 命中多个候选时，选择第几个候选")
 @click.option("--target", "target_option", help="目标分支、tag或commit，可替代位置参数 <target>")
 @click.option("--repo", "-r", default=".", help="目标Git仓库路径，默认当前目录")
 @click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式")
-def doctor(fix_commit, target, fix_option, fix_message, target_option, repo, output):
+def doctor(fix_commit, target, fix_option, fix_message, fix_index, target_option, repo, output):
     """检查仓库、fix 和 target 是否都能被正确解析，提前暴露歧义和输入错误。"""
     try:
         _doctor_command(
@@ -473,6 +551,7 @@ def doctor(fix_commit, target, fix_option, fix_message, target_option, repo, out
             fix_message,
             repo,
             output,
+            fix_index,
         )
     except click.ClickException:
         raise

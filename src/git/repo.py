@@ -70,6 +70,30 @@ class GitRepository:
                 matches.append(commit)
         return matches
 
+    def rank_commits_for_fix_message(
+        self,
+        commits: list[git.Commit],
+        query: str,
+        target_ref: Optional[str] = None,
+    ) -> list[git.Commit]:
+        """按更贴近fix查找心智的顺序排序message候选"""
+        normalized_query = query.strip().lower()
+
+        def sort_key(commit: git.Commit) -> tuple[int, int, int]:
+            message = commit.message.lower()
+            summary = commit.summary.lower()
+            exact_summary = int(normalized_query == summary)
+            starts_with = int(summary.startswith(normalized_query))
+            contains_in_summary = int(normalized_query in summary)
+            reachable_from_target = int(self.is_ancestor(commit.hexsha, target_ref)) if target_ref else 0
+            return (
+                exact_summary,
+                starts_with + contains_in_summary - reachable_from_target,
+                commit.committed_date,
+            )
+
+        return sorted(commits, key=sort_key, reverse=True)
+
     def ref_exists(self, ref: str) -> bool:
         """检查ref是否可被当前仓库解析"""
         try:

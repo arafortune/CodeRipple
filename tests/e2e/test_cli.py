@@ -40,6 +40,8 @@ class TestCLI:
         assert "--target" in result.output
         assert "--targets-file" in result.output
         assert "--fix-message" in result.output
+        assert "--fix-index" in result.output
+        assert "--list-fix-candidates" in result.output
         assert "--explain" in result.output
 
     def test_affected_help(self, runner):
@@ -54,6 +56,7 @@ class TestCLI:
         result = runner.invoke(cli, ["doctor", "--help"])
         assert result.exit_code == 0
         assert "--fix-message" in result.output
+        assert "--fix-index" in result.output
         assert "--target" in result.output
         assert "解析" in result.output or "doctor" in result.output
 
@@ -284,6 +287,89 @@ class TestCLI:
         payload = json.loads(result.output)
         assert payload["affected"] is True
 
+    def test_trace_lists_fix_message_candidates(self, runner, test_repo):
+        """测试可列出fix-message候选提交"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        bug_file.write_text("def buggy():\n    return 1 / 1\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("fix: divide by zero on master")
+
+        bug_file.write_text("def buggy():\n    return 1\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("fix: divide by zero on release")
+
+        result = runner.invoke(
+            cli,
+            [
+                "trace",
+                "--fix-message",
+                "divide by zero",
+                "--list-fix-candidates",
+                "--target",
+                "master",
+                "--repo",
+                str(test_repo),
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "候选提交" in result.output
+        assert "1." in result.output
+        assert "--fix-index" in result.output
+
+    def test_trace_selects_fix_message_candidate_by_index(self, runner, test_repo):
+        """测试可通过fix-index选择fix-message候选"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        git_repo.git.checkout("master")
+
+        bug_file.write_text("def buggy():\n    return 1 / 1\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("fix: divide by zero on master")
+
+        bug_file.write_text("def buggy():\n    return 2\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("noise after master fix")
+
+        git_repo.git.checkout("release/v1.0")
+        bug_file.write_text("def buggy():\n    return 1\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("fix: divide by zero on release")
+        git_repo.git.checkout("master")
+
+        result = runner.invoke(
+            cli,
+            [
+                "trace",
+                "--fix-message",
+                "divide by zero",
+                "--fix-index",
+                "2",
+                "--target",
+                "release/v1.0",
+                "--repo",
+                str(test_repo),
+                "--output",
+                "json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["affected"] is False
+
     def test_doctor_reports_resolved_fix_and_target(self, runner, test_repo):
         """测试doctor可解析fix和target"""
         git_repo = git.Repo(test_repo)
@@ -359,6 +445,46 @@ class TestCLI:
         assert payload["fix"]["ok"] is False
         assert len(payload["fix"]["candidates"]) >= 2
         assert "多个候选" in payload["fix"]["error"]
+
+    def test_doctor_resolves_ambiguous_fix_message_with_index(self, runner, test_repo):
+        """测试doctor可通过fix-index消解fix-message歧义"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        bug_file.write_text("def buggy():\n    return 1 / 1\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("fix: divide by zero on master")
+
+        bug_file.write_text("def buggy():\n    return 1\n")
+        git_repo.index.add(["bug.py"])
+        second_fix = git_repo.index.commit("fix: divide by zero on release")
+
+        result = runner.invoke(
+            cli,
+            [
+                "doctor",
+                "--fix-message",
+                "divide by zero",
+                "--fix-index",
+                "2",
+                "--target",
+                "master",
+                "--repo",
+                str(test_repo),
+                "--output",
+                "json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["fix"]["ok"] is True
+        assert len(payload["fix"]["candidates"]) >= 2
+        assert payload["fix"]["resolved"] == payload["fix"]["candidates"][1]["commit"]
 
     def test_doctor_reports_missing_target(self, runner, test_repo):
         """测试doctor会报告不存在的target"""
