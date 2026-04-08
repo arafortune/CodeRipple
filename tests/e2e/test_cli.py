@@ -38,6 +38,7 @@ class TestCLI:
         assert "target" in result.output
         assert "--fix" in result.output
         assert "--target" in result.output
+        assert "--targets-file" in result.output
         assert "--fix-message" in result.output
         assert "--explain" in result.output
 
@@ -46,6 +47,7 @@ class TestCLI:
         result = runner.invoke(cli, ["affected", "--help"])
         assert result.exit_code == 0
         assert "直观别名" in result.output or "affected" in result.output
+        assert "--targets-file" in result.output
 
     def test_doctor_help(self, runner):
         """测试doctor命令帮助"""
@@ -467,6 +469,86 @@ class TestCLI:
         assert result.exit_code == 0
         assert "分析过程:" in result.output
         assert "summary=" in result.output
+
+    def test_trace_supports_multiple_targets_in_json_output(self, runner, test_repo):
+        """测试可通过重复--target批量分析多个目标版本"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        git_repo.git.checkout("master")
+
+        bug_file.write_text("def buggy():\n    return 1 / 1\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("Fix bug on master")
+        git_repo.create_tag("v1.0.1", ref=fix_commit)
+
+        result = runner.invoke(
+            cli,
+            [
+                "trace",
+                "--fix",
+                fix_commit.hexsha,
+                "--target",
+                "release/v1.0",
+                "--target",
+                "v1.0.1",
+                "--repo",
+                str(test_repo),
+                "--output",
+                "json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["resolved_fix"] == fix_commit.hexsha
+        assert len(payload["targets"]) == 2
+        assert payload["targets"][0]["target"] == "release/v1.0"
+        assert payload["targets"][0]["affected"] is True
+        assert payload["targets"][1]["target"] == "v1.0.1"
+        assert payload["targets"][1]["affected"] is False
+
+    def test_trace_supports_targets_file(self, runner, test_repo):
+        """测试可通过targets file批量分析多个目标版本"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        git_repo.git.checkout("master")
+
+        bug_file.write_text("def buggy():\n    return 1 / 1\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("Fix bug on master")
+        git_repo.create_tag("v1.0.1", ref=fix_commit)
+
+        targets_file = test_repo / "targets.txt"
+        targets_file.write_text("# targets\nrelease/v1.0\nv1.0.1\n", encoding="utf-8")
+
+        result = runner.invoke(
+            cli,
+            [
+                "affected",
+                "--fix",
+                fix_commit.hexsha,
+                "--targets-file",
+                str(targets_file),
+                "--repo",
+                str(test_repo),
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "Target: release/v1.0" in result.output
+        assert "Target: v1.0.1" in result.output
 
     def test_trace_detects_affected_after_file_move(self, runner, test_repo):
         """测试真实CLI下文件移动后的修复仍可判定旧分支受影响"""

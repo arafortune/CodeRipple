@@ -3,6 +3,7 @@ CLI主入口
 """
 
 import json
+from pathlib import Path
 from typing import Optional
 
 import click
@@ -135,6 +136,42 @@ def _resolve_fix_and_target(
     return resolved_fix, resolved_target, resolved_from_message
 
 
+def _resolve_targets(
+    repo: str,
+    target: Optional[str],
+    target_options: tuple[str, ...],
+    targets_file: Optional[str],
+) -> list[str]:
+    git_repo = GitRepository(repo)
+    resolved_targets: list[str] = []
+
+    if target:
+        resolved_targets.append(target)
+
+    resolved_targets.extend([value for value in target_options if value])
+
+    if targets_file:
+        file_path = Path(targets_file)
+        for line in file_path.read_text(encoding="utf-8").splitlines():
+            value = line.strip()
+            if value and not value.startswith("#"):
+                resolved_targets.append(value)
+
+    if not resolved_targets:
+        raise click.UsageError("需要提供目标版本，使用位置参数 <target>、--target 或 --targets-file")
+
+    normalized_targets: list[str] = []
+    seen_targets = set()
+    for candidate in resolved_targets:
+        if candidate in seen_targets:
+            continue
+        if not git_repo.ref_exists(candidate):
+            raise click.UsageError(f"目标版本 {candidate!r} 不存在或无法解析")
+        seen_targets.add(candidate)
+        normalized_targets.append(candidate)
+    return normalized_targets
+
+
 def _doctor_command(
     fix_commit: Optional[str],
     target: Optional[str],
@@ -264,21 +301,26 @@ def _trace_command(
     fix_commit: Optional[str],
     target: Optional[str],
     fix_option: Optional[str],
-    target_option: Optional[str],
+    target_options: tuple[str, ...],
+    targets_file: Optional[str],
     fix_message: Optional[str],
     repo: str,
     config: str,
     output: str,
     explain: bool,
 ) -> None:
-    resolved_fix, resolved_target, resolved_from_message = _resolve_fix_and_target(
-        repo, fix_commit, target, fix_option, target_option, fix_message
+    resolved_targets = _resolve_targets(repo, target, target_options, targets_file)
+    resolved_fix, _, resolved_from_message = _resolve_fix_and_target(
+        repo, fix_commit, resolved_targets[0], fix_option, resolved_targets[0], fix_message
     )
     config_obj = Config.from_file(config)
     tracer = BugTracer(config_obj, repo)
-    result = tracer.trace(resolved_fix, resolved_target)
-    if output == "json":
-        payload = {
+    results = []
+    for resolved_target in resolved_targets:
+        result = tracer.trace(resolved_fix, resolved_target)
+        entry = {
+            "result": result,
+            "target": resolved_target,
             "affected": result.found,
             "commit": result.commit,
             "method": result.method,
@@ -286,15 +328,55 @@ def _trace_command(
             "details": result.details,
         }
         if explain:
-            payload["analysis"] = _build_analysis(result)
+            entry["analysis"] = _build_analysis(result)
+            entry["resolved_fix"] = resolved_fix
+            entry["resolved_target"] = resolved_target
+            if resolved_from_message:
+                entry["fix_message"] = resolved_from_message
+        results.append(entry)
+
+    if output == "json" and len(results) > 1:
+        serialized_results = [{key: value for key, value in entry.items() if key != "result"} for entry in results]
+        payload = {
+            "resolved_fix": resolved_fix,
+            "targets": serialized_results,
+        }
+        if resolved_from_message:
+            payload["fix_message"] = resolved_from_message
+        click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+
+    if output == "json" and len(results) == 1:
+        payload = {
+            "affected": results[0]["affected"],
+            "commit": results[0]["commit"],
+            "method": results[0]["method"],
+            "confidence": results[0]["confidence"],
+            "details": results[0]["details"],
+        }
+        if explain:
+            payload["analysis"] = results[0]["analysis"]
             payload["resolved_fix"] = resolved_fix
-            payload["resolved_target"] = resolved_target
+            payload["resolved_target"] = results[0]["resolved_target"]
             if resolved_from_message:
                 payload["fix_message"] = resolved_from_message
         click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
         return
 
-    _render_table(result, explain, resolved_fix, resolved_target, resolved_from_message)
+    if len(results) == 1:
+        _render_table(results[0]["result"], explain, resolved_fix, resolved_targets[0], resolved_from_message)
+        return
+
+    for entry in results:
+        click.echo(f"Target: {entry['target']}")
+        _render_table(
+            entry["result"],
+            explain,
+            resolved_fix,
+            entry["target"],
+            resolved_from_message,
+        )
+        click.echo()
 
 
 @cli.command(name="trace")
@@ -302,12 +384,13 @@ def _trace_command(
 @click.argument("target", metavar="target", required=False)
 @click.option("--fix", "fix_option", help="显式指定修复commit，可替代位置参数 <fix_commit>")
 @click.option("--fix-message", help="按提交信息搜索修复commit，例如 --fix-message 'divide by zero'")
-@click.option("--target", "target_option", help="目标分支、tag或commit，可替代位置参数 <target>")
+@click.option("--target", "target_options", multiple=True, help="目标分支、tag或commit，可重复传入以批量分析")
+@click.option("--targets-file", help="从文件读取多个目标版本，每行一个ref，支持#注释")
 @click.option("--repo", "-r", default=".", help="目标Git仓库路径，默认当前目录")
 @click.option("--config", "-c", default="config/coderipple.yaml", help="配置文件路径")
 @click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式")
 @click.option("--explain", is_flag=True, help="输出结构化分析过程")
-def trace(fix_commit, target, fix_option, fix_message, target_option, repo, config, output, explain):
+def trace(fix_commit, target, fix_option, fix_message, target_options, targets_file, repo, config, output, explain):
     """追溯目标版本是否仍受某个修复提交对应的Bug影响。
 
     支持旧用法：
@@ -316,13 +399,15 @@ def trace(fix_commit, target, fix_option, fix_message, target_option, repo, conf
     也支持显式参数：
       coderipple trace --fix <fix_commit> --target <target>
       coderipple trace --fix-message "<message>" --target <target>
+      coderipple trace --fix <fix_commit> --target <target1> --target <target2>
     """
     try:
         _trace_command(
             fix_commit,
             target,
             fix_option,
-            target_option,
+            target_options,
+            targets_file,
             fix_message,
             repo,
             config,
@@ -341,19 +426,21 @@ def trace(fix_commit, target, fix_option, fix_message, target_option, repo, conf
 @click.argument("target", metavar="target", required=False)
 @click.option("--fix", "fix_option", help="显式指定修复commit，可替代位置参数 <fix_commit>")
 @click.option("--fix-message", help="按提交信息搜索修复commit，例如 --fix-message 'divide by zero'")
-@click.option("--target", "target_option", help="目标分支、tag或commit，可替代位置参数 <target>")
+@click.option("--target", "target_options", multiple=True, help="目标分支、tag或commit，可重复传入以批量分析")
+@click.option("--targets-file", help="从文件读取多个目标版本，每行一个ref，支持#注释")
 @click.option("--repo", "-r", default=".", help="目标Git仓库路径，默认当前目录")
 @click.option("--config", "-c", default="config/coderipple.yaml", help="配置文件路径")
 @click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式")
 @click.option("--explain", is_flag=True, help="输出结构化分析过程")
-def affected(fix_commit, target, fix_option, fix_message, target_option, repo, config, output, explain):
+def affected(fix_commit, target, fix_option, fix_message, target_options, targets_file, repo, config, output, explain):
     """`trace` 的直观别名，直接表达目标版本是否受影响。"""
     try:
         _trace_command(
             fix_commit,
             target,
             fix_option,
-            target_option,
+            target_options,
+            targets_file,
             fix_message,
             repo,
             config,
