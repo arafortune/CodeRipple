@@ -22,9 +22,11 @@ def cli():
 
 
 def _build_analysis(result) -> dict:
+    status = _infer_result_status(result)
     attempts = result.details.get("attempts", [])
     analysis = {
         "summary": {
+            "status": status,
             "affected": result.found,
             "method": result.method,
             "confidence": result.confidence,
@@ -78,6 +80,26 @@ def _build_strategy_analysis(attempt: dict) -> dict:
         "summary": summary,
         "evidence": evidence,
     }
+
+
+def _infer_result_status(result) -> str:
+    if result.found:
+        return "affected"
+
+    attempts = result.details.get("attempts", [])
+    for attempt in attempts:
+        details = attempt.get("details", {})
+        if any(
+            details.get(flag)
+            for flag in (
+                "contains_fix_commit",
+                "equivalent_commit",
+                "equivalent_state",
+                "equivalent_ast_state",
+            )
+        ):
+            return "not_affected"
+    return "unknown"
 
 
 def _summarize_strategy(method: Optional[str], status: str, evidence: dict) -> str:
@@ -357,8 +379,10 @@ def _doctor_command(
 
 
 def _render_table(result, explain: bool, resolved_fix: str, resolved_target: str, resolved_from_message: Optional[str]) -> None:
-    if result.found:
+    status = _infer_result_status(result)
+    if status == "affected":
         click.echo("✓ Bug存在于目标版本")
+        click.echo(f"  状态: {status}")
         click.echo(f"  Commit: {result.commit}")
         click.echo(f"  方法: {result.method}")
         click.echo(f"  置信度: {result.confidence:.2%}")
@@ -366,7 +390,9 @@ def _render_table(result, explain: bool, resolved_fix: str, resolved_target: str
         if attempts:
             click.echo(f"  尝试策略数: {len(attempts)}")
     else:
-        click.echo("✗ Bug不存在于目标版本")
+        label = "✗ Bug不存在于目标版本" if status == "not_affected" else "? 无法确认目标版本是否受影响"
+        click.echo(label)
+        click.echo(f"  状态: {status}")
         attempts = result.details.get("attempts", [])
         if attempts:
             click.echo("  策略摘要:")
@@ -421,6 +447,7 @@ def _trace_command(
         entry = {
             "result": result,
             "target": resolved_target,
+            "status": _infer_result_status(result),
             "affected": result.found,
             "commit": result.commit,
             "method": result.method,
@@ -448,6 +475,7 @@ def _trace_command(
 
     if output == "json" and len(results) == 1:
         payload = {
+            "status": results[0]["status"],
             "affected": results[0]["affected"],
             "commit": results[0]["commit"],
             "method": results[0]["method"],

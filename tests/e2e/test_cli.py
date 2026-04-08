@@ -192,6 +192,7 @@ class TestCLI:
 
         assert result.exit_code == 0
         payload = json.loads(result.output)
+        assert payload["status"] == "not_affected"
         assert payload["affected"] is False
         assert payload["commit"] is None
         assert payload["method"] is None
@@ -256,6 +257,7 @@ class TestCLI:
 
         assert result.exit_code == 0
         payload = json.loads(result.output)
+        assert payload["status"] == "unknown"
         assert payload["affected"] is False
         assert payload["details"]["attempts"][0]["method"] == "commit_chain"
         assert payload["details"]["attempts"][0]["found"] is False
@@ -293,6 +295,7 @@ class TestCLI:
 
         assert result.exit_code == 0
         payload = json.loads(result.output)
+        assert payload["status"] == "affected"
         assert payload["affected"] is True
 
     def test_trace_lists_fix_message_candidates(self, runner, test_repo):
@@ -647,6 +650,7 @@ class TestCLI:
         assert payload["resolved_fix"] == fix_commit.hexsha
         assert payload["resolved_target"] == "release/v1.0"
         assert "analysis" in payload
+        assert payload["analysis"]["summary"]["status"] == "unknown"
         assert payload["analysis"]["strategies"][0]["method"] == "commit_chain"
         assert payload["analysis"]["strategies"][0]["status"] == "unknown"
         assert "summary" in payload["analysis"]["strategies"][0]
@@ -685,6 +689,35 @@ class TestCLI:
         assert result.exit_code == 0
         assert "分析过程:" in result.output
         assert "summary=" in result.output
+
+    def test_trace_table_output_shows_unknown_status(self, runner, test_repo):
+        """测试未命中修复且未找到bug证据时table输出显示unknown状态"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def safe(x):\n    return x + 1\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Safe baseline")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        git_repo.git.checkout("master")
+
+        bug_file.write_text("def buggy(x):\n    return 10 / x\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug on master")
+
+        bug_file.write_text("def buggy(x):\n    if x == 0:\n        return 0\n    return 10 / x\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("Fix bug on master")
+
+        result = runner.invoke(
+            cli,
+            ["trace", "--fix", fix_commit.hexsha, "--target", "release/v1.0", "--repo", str(test_repo)],
+        )
+
+        assert result.exit_code == 0
+        assert "? 无法确认目标版本是否受影响" in result.output
+        assert "状态: unknown" in result.output
 
     def test_trace_supports_multiple_targets_in_json_output(self, runner, test_repo):
         """测试可通过重复--target批量分析多个目标版本"""
