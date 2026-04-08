@@ -47,6 +47,14 @@ class TestCLI:
         assert result.exit_code == 0
         assert "直观别名" in result.output or "affected" in result.output
 
+    def test_doctor_help(self, runner):
+        """测试doctor命令帮助"""
+        result = runner.invoke(cli, ["doctor", "--help"])
+        assert result.exit_code == 0
+        assert "--fix-message" in result.output
+        assert "--target" in result.output
+        assert "解析" in result.output or "doctor" in result.output
+
     def test_trace_not_found_shows_strategy_summary(self, runner):
         """测试未命中时输出策略摘要"""
         result = runner.invoke(cli, ["trace", "deadbeef", "master"])
@@ -273,6 +281,112 @@ class TestCLI:
         assert result.exit_code == 0
         payload = json.loads(result.output)
         assert payload["affected"] is True
+
+    def test_doctor_reports_resolved_fix_and_target(self, runner, test_repo):
+        """测试doctor可解析fix和target"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        git_repo.git.checkout("master")
+
+        bug_file.write_text("def buggy():\n    return 1 / 1\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("fix: handle divide by zero")
+
+        result = runner.invoke(
+            cli,
+            [
+                "doctor",
+                "--fix",
+                fix_commit.hexsha,
+                "--target",
+                "release/v1.0",
+                "--repo",
+                str(test_repo),
+                "--output",
+                "json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["ok"] is True
+        assert payload["fix"]["resolved"] == fix_commit.hexsha
+        assert payload["target"]["resolved"] == "release/v1.0"
+
+    def test_doctor_reports_ambiguous_fix_message(self, runner, test_repo):
+        """测试doctor会报告fix-message多命中"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        bug_file.write_text("def buggy():\n    return 1 / 1\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("fix: handle divide by zero on master")
+
+        bug_file.write_text("def buggy():\n    return 1\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("fix: handle divide by zero on release")
+
+        result = runner.invoke(
+            cli,
+            [
+                "doctor",
+                "--fix-message",
+                "divide by zero",
+                "--target",
+                "master",
+                "--repo",
+                str(test_repo),
+                "--output",
+                "json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["ok"] is False
+        assert payload["fix"]["ok"] is False
+        assert len(payload["fix"]["candidates"]) >= 2
+        assert "多个候选" in payload["fix"]["error"]
+
+    def test_doctor_reports_missing_target(self, runner, test_repo):
+        """测试doctor会报告不存在的target"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("fix: handle divide by zero")
+
+        result = runner.invoke(
+            cli,
+            [
+                "doctor",
+                "--fix",
+                fix_commit.hexsha,
+                "--target",
+                "release/missing",
+                "--repo",
+                str(test_repo),
+                "--output",
+                "json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["ok"] is False
+        assert payload["target"]["ok"] is False
+        assert "无法解析" in payload["target"]["error"]
 
     def test_trace_json_explain_output(self, runner, test_repo):
         """测试--explain会在JSON中输出结构化分析过程"""

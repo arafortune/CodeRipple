@@ -55,14 +55,28 @@ class GitRepository:
 
     def find_commit_by_message(self, query: str, max_count: int = 500) -> Optional[git.Commit]:
         """按提交信息搜索最近的commit"""
+        matches = self.find_commits_by_message(query, max_count=max_count)
+        return matches[0] if matches else None
+
+    def find_commits_by_message(self, query: str, max_count: int = 500) -> list[git.Commit]:
+        """按提交信息搜索最近的commit列表"""
         normalized_query = query.strip().lower()
         if not normalized_query:
-            return None
+            return []
 
+        matches: list[git.Commit] = []
         for commit in self.repo.iter_commits("--all", max_count=max_count):
             if normalized_query in commit.message.lower():
-                return commit
-        return None
+                matches.append(commit)
+        return matches
+
+    def ref_exists(self, ref: str) -> bool:
+        """检查ref是否可被当前仓库解析"""
+        try:
+            self.repo.commit(ref)
+            return True
+        except Exception:
+            return False
 
     def get_changed_file_states(self, commit_hash: str) -> Dict[str, Optional[str]]:
         """获取commit直接修改的文件在该commit中的最终内容"""
