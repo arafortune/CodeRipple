@@ -31,27 +31,65 @@ def _build_analysis(result) -> dict:
         "strategies": [],
     }
     for attempt in attempts:
-        details = attempt.get("details", {})
-        status = "affected" if attempt.get("found") else "unknown"
-        if any(
-            details.get(flag)
-            for flag in (
-                "contains_fix_commit",
-                "equivalent_commit",
-                "equivalent_state",
-                "equivalent_ast_state",
-            )
-        ):
-            status = "not_affected"
-        analysis["strategies"].append(
-            {
-                "method": attempt.get("method"),
-                "status": status,
-                "confidence": attempt.get("confidence", 0.0),
-                "details": details,
-            }
-        )
+        analysis["strategies"].append(_build_strategy_analysis(attempt))
     return analysis
+
+
+def _build_strategy_analysis(attempt: dict) -> dict:
+    details = attempt.get("details", {})
+    method = attempt.get("method")
+    confidence = attempt.get("confidence", 0.0)
+
+    evidence = {
+        "reason": details.get("reason"),
+        "file": details.get("file"),
+        "lines": details.get("lines"),
+        "matched_lines": details.get("matched_lines"),
+        "match_score": details.get("match_score"),
+        "added_score": details.get("added_score"),
+        "similarity": details.get("similarity"),
+        "matched_nodes": details.get("matched_nodes"),
+        "candidate_source": details.get("candidate_source"),
+        "contains_fix_commit": details.get("contains_fix_commit", False),
+        "equivalent_commit": details.get("equivalent_commit"),
+        "equivalent_state": details.get("equivalent_state", False),
+        "equivalent_ast_state": details.get("equivalent_ast_state", False),
+    }
+    evidence = {key: value for key, value in evidence.items() if value not in (None, False, [], {})}
+
+    status = "affected" if attempt.get("found") else "unknown"
+    if any(
+        details.get(flag)
+        for flag in (
+            "contains_fix_commit",
+            "equivalent_commit",
+            "equivalent_state",
+            "equivalent_ast_state",
+        )
+    ):
+        status = "not_affected"
+
+    summary = _summarize_strategy(method, status, evidence)
+    return {
+        "method": method,
+        "status": status,
+        "confidence": confidence,
+        "summary": summary,
+        "evidence": evidence,
+    }
+
+
+def _summarize_strategy(method: Optional[str], status: str, evidence: dict) -> str:
+    if method == "commit_chain":
+        if status == "not_affected":
+            return evidence.get("reason", "target already contains an equivalent fix")
+        if status == "unknown":
+            return evidence.get("reason", "target does not contain the fix commit or an equivalent fix")
+    if status == "affected":
+        if evidence.get("file"):
+            return f"matched bug evidence in {evidence['file']}"
+        return "matched bug evidence in target history"
+    return evidence.get("reason", "no decisive evidence found")
 
 
 def _resolve_fix_and_target(
@@ -210,16 +248,15 @@ def _render_table(result, explain: bool, resolved_fix: str, resolved_target: str
                 )
 
     if explain:
+        analysis = _build_analysis(result)
         click.echo("  分析过程:")
         click.echo(f"    - resolved_fix: {resolved_fix}")
         if resolved_from_message:
             click.echo(f"    - fix_message: {resolved_from_message}")
         click.echo(f"    - resolved_target: {resolved_target}")
-        for strategy in _build_analysis(result)["strategies"]:
-            reason = strategy["details"].get("reason")
-            reason_text = f", reason={reason}" if reason else ""
+        for strategy in analysis["strategies"]:
             click.echo(
-                f"    - {strategy['method']}: status={strategy['status']}, confidence={strategy['confidence']:.2%}{reason_text}"
+                f"    - {strategy['method']}: status={strategy['status']}, confidence={strategy['confidence']:.2%}, summary={strategy['summary']}"
             )
 
 

@@ -430,6 +430,43 @@ class TestCLI:
         assert payload["resolved_target"] == "release/v1.0"
         assert "analysis" in payload
         assert payload["analysis"]["strategies"][0]["method"] == "commit_chain"
+        assert payload["analysis"]["strategies"][0]["status"] == "unknown"
+        assert "summary" in payload["analysis"]["strategies"][0]
+        assert "evidence" in payload["analysis"]["strategies"][0]
+
+    def test_trace_table_explain_output_uses_unified_summary(self, runner, test_repo):
+        """测试table explain输出使用统一的summary格式"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        git_repo.git.checkout("master")
+
+        bug_file.write_text("def buggy():\n    return 1 / 1\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("Fix bug on master")
+
+        result = runner.invoke(
+            cli,
+            [
+                "trace",
+                "--fix",
+                fix_commit.hexsha,
+                "--target",
+                "release/v1.0",
+                "--repo",
+                str(test_repo),
+                "--explain",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "分析过程:" in result.output
+        assert "summary=" in result.output
 
     def test_trace_detects_affected_after_file_move(self, runner, test_repo):
         """测试真实CLI下文件移动后的修复仍可判定旧分支受影响"""
