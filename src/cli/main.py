@@ -281,32 +281,43 @@ def _doctor_command(
     fix_commit: Optional[str],
     target: Optional[str],
     fix_option: Optional[str],
-    target_option: Optional[str],
+    target_options: tuple[str, ...],
+    targets_file: Optional[str],
     fix_message: Optional[str],
     repo: str,
+    config: str,
     output: str,
     fix_index: int,
 ) -> None:
     git_repo = GitRepository(repo)
     repo_path = str(git_repo.repo_path)
+    config_diagnostics = {"path": config, "ok": True}
+    try:
+        Config.from_file(config)
+    except Exception as exc:
+        config_diagnostics = {"path": config, "ok": False, "error": str(exc)}
+
     diagnostics: dict = {
         "repo": {"path": repo_path, "ok": True},
+        "config": config_diagnostics,
         "fix": {"ok": False},
-        "target": {"ok": False},
+        "targets": [],
     }
 
-    raw_target = target_option or target
-    if raw_target:
-        diagnostics["target"]["input"] = raw_target
-        if git_repo.ref_exists(raw_target):
-            resolved_target = git_repo.get_commit(raw_target).hexsha
-            diagnostics["target"].update(
-                {"ok": True, "resolved": raw_target, "commit": resolved_target}
+    try:
+        resolved_targets = _resolve_targets(repo, target, target_options, targets_file)
+        for raw_target in resolved_targets:
+            diagnostics["targets"].append(
+                {
+                    "input": raw_target,
+                    "ok": True,
+                    "resolved": raw_target,
+                    "commit": git_repo.get_commit(raw_target).hexsha,
+                }
             )
-        else:
-            diagnostics["target"]["error"] = "目标版本不存在或无法解析"
-    else:
-        diagnostics["target"]["error"] = "缺少目标版本"
+    except click.UsageError as exc:
+        diagnostics["targets"].append({"ok": False, "error": exc.message})
+        resolved_targets = []
 
     raw_fix = fix_option or fix_commit
     if fix_message:
@@ -315,7 +326,7 @@ def _doctor_command(
         matches = git_repo.rank_commits_for_fix_message(
             git_repo.find_commits_by_message(fix_message),
             fix_message,
-            raw_target,
+            resolved_targets[0] if resolved_targets else None,
         )
         diagnostics["fix"]["candidates"] = [
             {"commit": commit.hexsha, "summary": commit.summary} for commit in matches[:5]
@@ -341,7 +352,13 @@ def _doctor_command(
     else:
         diagnostics["fix"]["error"] = "缺少修复提交"
 
-    diagnostics["ok"] = all(section["ok"] for key, section in diagnostics.items() if key in {"repo", "fix", "target"})
+    diagnostics["ok"] = (
+        diagnostics["repo"]["ok"]
+        and diagnostics["config"]["ok"]
+        and diagnostics["fix"]["ok"]
+        and bool(diagnostics["targets"])
+        and all(target_item["ok"] for target_item in diagnostics["targets"])
+    )
 
     if output == "json":
         click.echo(json.dumps(diagnostics, indent=2, ensure_ascii=False))
@@ -349,6 +366,11 @@ def _doctor_command(
 
     click.echo(f"Repository: {repo_path}")
     click.echo(f"  status: {'ok' if diagnostics['repo']['ok'] else 'error'}")
+    click.echo("Config:")
+    click.echo(f"  status: {'ok' if diagnostics['config']['ok'] else 'error'}")
+    click.echo(f"  path: {diagnostics['config']['path']}")
+    if not diagnostics["config"]["ok"]:
+        click.echo(f"  error: {diagnostics['config']['error']}")
     click.echo("Fix:")
     click.echo(f"  status: {'ok' if diagnostics['fix']['ok'] else 'error'}")
     if "mode" in diagnostics["fix"]:
@@ -365,15 +387,16 @@ def _doctor_command(
         for candidate in candidates:
             click.echo(f"    - {candidate['commit'][:8]} {candidate['summary']}")
 
-    click.echo("Target:")
-    click.echo(f"  status: {'ok' if diagnostics['target']['ok'] else 'error'}")
-    if "input" in diagnostics["target"]:
-        click.echo(f"  input: {diagnostics['target']['input']}")
-    if diagnostics["target"]["ok"]:
-        click.echo(f"  resolved: {diagnostics['target']['resolved']}")
-        click.echo(f"  commit: {diagnostics['target']['commit']}")
-    else:
-        click.echo(f"  error: {diagnostics['target']['error']}")
+    click.echo("Targets:")
+    for target_item in diagnostics["targets"]:
+        click.echo(f"  - status: {'ok' if target_item['ok'] else 'error'}")
+        if "input" in target_item:
+            click.echo(f"    input: {target_item['input']}")
+        if target_item["ok"]:
+            click.echo(f"    resolved: {target_item['resolved']}")
+            click.echo(f"    commit: {target_item['commit']}")
+        else:
+            click.echo(f"    error: {target_item['error']}")
 
     click.echo(f"Overall: {'ok' if diagnostics['ok'] else 'error'}")
 
@@ -622,19 +645,23 @@ def affected(
 @click.option("--fix", "fix_option", help="显式指定修复commit，可替代位置参数 <fix_commit>")
 @click.option("--fix-message", help="按提交信息搜索修复commit，并检测是否存在多候选")
 @click.option("--fix-index", default=0, type=int, help="当 --fix-message 命中多个候选时，选择第几个候选")
-@click.option("--target", "target_option", help="目标分支、tag或commit，可替代位置参数 <target>")
+@click.option("--target", "target_options", multiple=True, help="目标分支、tag或commit，可重复传入以批量诊断")
+@click.option("--targets-file", help="从文件读取多个目标版本，每行一个ref，支持#注释")
 @click.option("--repo", "-r", default=".", help="目标Git仓库路径，默认当前目录")
+@click.option("--config", "-c", default="config/coderipple.yaml", help="配置文件路径")
 @click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式")
-def doctor(fix_commit, target, fix_option, fix_message, fix_index, target_option, repo, output):
+def doctor(fix_commit, target, fix_option, fix_message, fix_index, target_options, targets_file, repo, config, output):
     """检查仓库、fix 和 target 是否都能被正确解析，提前暴露歧义和输入错误。"""
     try:
         _doctor_command(
             fix_commit,
             target,
             fix_option,
-            target_option,
+            target_options,
+            targets_file,
             fix_message,
             repo,
+            config,
             output,
             fix_index,
         )

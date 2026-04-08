@@ -58,6 +58,8 @@ class TestCLI:
         assert "--fix-message" in result.output
         assert "--fix-index" in result.output
         assert "--target" in result.output
+        assert "--targets-file" in result.output
+        assert "--config" in result.output
         assert "解析" in result.output or "doctor" in result.output
 
     def test_find_fix_help(self, runner):
@@ -497,8 +499,9 @@ class TestCLI:
         assert result.exit_code == 0
         payload = json.loads(result.output)
         assert payload["ok"] is True
+        assert payload["config"]["ok"] is True
         assert payload["fix"]["resolved"] == fix_commit.hexsha
-        assert payload["target"]["resolved"] == "release/v1.0"
+        assert payload["targets"][0]["resolved"] == "release/v1.0"
 
     def test_doctor_reports_ambiguous_fix_message(self, runner, test_repo):
         """测试doctor会报告fix-message多命中"""
@@ -606,8 +609,79 @@ class TestCLI:
         assert result.exit_code == 0
         payload = json.loads(result.output)
         assert payload["ok"] is False
-        assert payload["target"]["ok"] is False
-        assert "无法解析" in payload["target"]["error"]
+        assert payload["targets"][0]["ok"] is False
+        assert "无法解析" in payload["targets"][0]["error"]
+
+    def test_doctor_supports_multiple_targets(self, runner, test_repo):
+        """测试doctor可批量诊断多个target"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        git_repo.git.checkout("master")
+        bug_file.write_text("def buggy():\n    return 1 / 1\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("fix: handle divide by zero")
+        git_repo.create_tag("v1.0.1", ref=fix_commit)
+
+        result = runner.invoke(
+            cli,
+            [
+                "doctor",
+                "--fix",
+                fix_commit.hexsha,
+                "--target",
+                "release/v1.0",
+                "--target",
+                "v1.0.1",
+                "--repo",
+                str(test_repo),
+                "--output",
+                "json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert len(payload["targets"]) == 2
+        assert all(item["ok"] for item in payload["targets"])
+
+    def test_doctor_reports_invalid_config(self, runner, test_repo):
+        """测试doctor会诊断配置文件错误"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("fix: handle divide by zero")
+
+        broken_config = test_repo / "broken.yaml"
+        broken_config.write_text("invalid: [", encoding="utf-8")
+
+        result = runner.invoke(
+            cli,
+            [
+                "doctor",
+                "--fix",
+                fix_commit.hexsha,
+                "--target",
+                "master",
+                "--repo",
+                str(test_repo),
+                "--config",
+                str(broken_config),
+                "--output",
+                "json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["config"]["ok"] is False
 
     def test_trace_json_explain_output(self, runner, test_repo):
         """测试--explain会在JSON中输出结构化分析过程"""
