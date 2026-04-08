@@ -27,6 +27,9 @@ uv run coderipple trace <fix_commit> <target_tag_or_branch>
 # 更推荐的显式参数形式
 uv run coderipple affected --fix <fix_commit> --target <branch_or_tag_or_commit>
 
+# 先查找候选修复提交
+uv run coderipple find-fix --message "<message>"
+
 # 按提交信息搜索修复commit
 uv run coderipple trace --fix-message "<message>" --target <branch_or_tag_or_commit>
 
@@ -43,6 +46,9 @@ uv run coderipple affected --fix <fix_commit> --targets-file targets.txt
 ```bash
 # 检查修复提交 abc123 对应的Bug是否仍影响 v1.0.0
 uv run coderipple affected --fix abc123 --target v1.0.0
+
+# 先查找候选修复提交
+uv run coderipple find-fix --message "divide by zero" --target release/v1.0
 
 # 使用旧位置参数形式
 uv run coderipple trace abc123 v1.0.0
@@ -71,6 +77,7 @@ uv run coderipple trace --fix abc123 --target v1.0.0 --output json --explain
 --fix-message   按提交信息搜索修复commit
 --fix-index     当 --fix-message 命中多个候选时，选择第几个候选
 --list-fix-candidates  仅列出 --fix-message 命中的候选提交
+find-fix        独立搜索候选修复提交
 --target        指定目标分支、tag或commit，可重复传入
 --targets-file  从文件读取多个目标版本，每行一个ref
 --repo          指定目标仓库路径

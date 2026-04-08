@@ -162,6 +162,63 @@ def _format_fix_candidates_message(fix_message: str, matched_commits: list[git.C
     return "\n".join(lines)
 
 
+def _build_fix_candidates(
+    git_repo: GitRepository,
+    query: str,
+    target_ref: Optional[str],
+    limit: int,
+) -> list[dict]:
+    ranked_commits = git_repo.rank_commits_for_fix_message(
+        git_repo.find_commits_by_message(query, max_count=max(limit * 5, 50)),
+        query,
+        target_ref,
+    )
+    candidates = []
+    for index, commit in enumerate(ranked_commits[:limit], start=1):
+        reachable = git_repo.is_ancestor(commit.hexsha, target_ref) if target_ref else False
+        candidates.append(
+            {
+                "index": index,
+                "commit": commit.hexsha,
+                "summary": commit.summary,
+                "reachable_from_target": reachable,
+                "reason": "message match ranked by summary match, recency, and target reachability",
+            }
+        )
+    return candidates
+
+
+def _find_fix_command(message: str, target: Optional[str], repo: str, limit: int, output: str) -> None:
+    git_repo = GitRepository(repo)
+    if target and not git_repo.ref_exists(target):
+        raise click.UsageError(f"目标版本 {target!r} 不存在或无法解析")
+
+    candidates = _build_fix_candidates(git_repo, message, target, limit)
+    payload = {
+        "query": message,
+        "target": target,
+        "repo": str(git_repo.repo_path),
+        "candidates": candidates,
+    }
+
+    if output == "json":
+        click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+
+    click.echo(f"Query: {message}")
+    if target:
+        click.echo(f"Target: {target}")
+    click.echo(f"Repository: {git_repo.repo_path}")
+    if not candidates:
+        click.echo("No candidates found.")
+        return
+    for candidate in candidates:
+        reachability = "reachable" if candidate["reachable_from_target"] else "not-reachable"
+        click.echo(
+            f"{candidate['index']}. {candidate['commit'][:8]} {candidate['summary']} [{reachability}]"
+        )
+
+
 def _resolve_targets(
     repo: str,
     target: Optional[str],
@@ -553,6 +610,25 @@ def doctor(fix_commit, target, fix_option, fix_message, fix_index, target_option
             output,
             fix_index,
         )
+    except click.ClickException:
+        raise
+    except git.exc.InvalidGitRepositoryError:
+        raise click.ClickException(f"{repo!r} 不是有效的Git仓库")
+    except Exception as e:
+        click.echo(f"错误: {e}", err=True)
+        raise click.Abort()
+
+
+@cli.command(name="find-fix")
+@click.option("--message", required=True, help="按提交信息搜索候选修复提交")
+@click.option("--target", help="可选目标版本，用于排序时降低已在目标中可达的候选优先级")
+@click.option("--repo", "-r", default=".", help="目标Git仓库路径，默认当前目录")
+@click.option("--limit", default=10, show_default=True, type=int, help="最多返回多少个候选提交")
+@click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式")
+def find_fix(message, target, repo, limit, output):
+    """根据提交信息搜索候选修复提交，供后续 trace/affected 使用。"""
+    try:
+        _find_fix_command(message, target, repo, limit, output)
     except click.ClickException:
         raise
     except git.exc.InvalidGitRepositoryError:

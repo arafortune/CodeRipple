@@ -60,6 +60,14 @@ class TestCLI:
         assert "--target" in result.output
         assert "解析" in result.output or "doctor" in result.output
 
+    def test_find_fix_help(self, runner):
+        """测试find-fix命令帮助"""
+        result = runner.invoke(cli, ["find-fix", "--help"])
+        assert result.exit_code == 0
+        assert "--message" in result.output
+        assert "--target" in result.output
+        assert "--limit" in result.output
+
     def test_trace_not_found_shows_strategy_summary(self, runner):
         """测试未命中时输出策略摘要"""
         result = runner.invoke(cli, ["trace", "deadbeef", "master"])
@@ -369,6 +377,88 @@ class TestCLI:
         assert result.exit_code == 0
         payload = json.loads(result.output)
         assert payload["affected"] is False
+
+    def test_find_fix_returns_ranked_candidates_in_json(self, runner, test_repo):
+        """测试find-fix可返回候选修复提交列表"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        bug_file.write_text("def buggy():\n    return 1 / 1\n")
+        git_repo.index.add(["bug.py"])
+        first_fix = git_repo.index.commit("fix: divide by zero on master")
+
+        bug_file.write_text("def buggy():\n    return 1\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("fix: divide by zero on release")
+
+        result = runner.invoke(
+            cli,
+            [
+                "find-fix",
+                "--message",
+                "divide by zero",
+                "--repo",
+                str(test_repo),
+                "--output",
+                "json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["query"] == "divide by zero"
+        assert len(payload["candidates"]) >= 2
+        assert payload["candidates"][0]["index"] == 1
+        assert payload["candidates"][0]["commit"] == first_fix.hexsha or isinstance(
+            payload["candidates"][0]["commit"], str
+        )
+        assert "reason" in payload["candidates"][0]
+
+    def test_find_fix_marks_reachability_for_target(self, runner, test_repo):
+        """测试find-fix会标记候选是否已在目标版本中可达"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        git_repo.git.checkout("master")
+
+        bug_file.write_text("def buggy():\n    return 1 / 1\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("fix: divide by zero on master")
+
+        git_repo.git.checkout("release/v1.0")
+        bug_file.write_text("def buggy():\n    return 1\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("fix: divide by zero on release")
+        git_repo.git.checkout("master")
+
+        result = runner.invoke(
+            cli,
+            [
+                "find-fix",
+                "--message",
+                "divide by zero",
+                "--target",
+                "release/v1.0",
+                "--repo",
+                str(test_repo),
+                "--output",
+                "json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert any(candidate["reachable_from_target"] for candidate in payload["candidates"])
+        assert any(not candidate["reachable_from_target"] for candidate in payload["candidates"])
 
     def test_doctor_reports_resolved_fix_and_target(self, runner, test_repo):
         """测试doctor可解析fix和target"""
