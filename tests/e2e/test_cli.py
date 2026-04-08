@@ -68,6 +68,8 @@ class TestCLI:
         assert result.exit_code == 0
         assert "--message" in result.output
         assert "--target" in result.output
+        assert "--path" in result.output
+        assert "--since-days" in result.output
         assert "--limit" in result.output
 
     def test_trace_not_found_shows_strategy_summary(self, runner):
@@ -464,6 +466,77 @@ class TestCLI:
         payload = json.loads(result.output)
         assert any(candidate["reachable_from_target"] for candidate in payload["candidates"])
         assert any(not candidate["reachable_from_target"] for candidate in payload["candidates"])
+
+    def test_find_fix_filters_candidates_by_path(self, runner, test_repo):
+        """测试find-fix可按路径过滤候选提交"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        other_file = test_repo / "other.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        other_file.write_text("def other():\n    return 0\n")
+        git_repo.index.add(["bug.py", "other.py"])
+        git_repo.index.commit("Introduce bug")
+
+        bug_file.write_text("def buggy():\n    return 1 / 1\n")
+        git_repo.index.add(["bug.py"])
+        bug_fix = git_repo.index.commit("fix: divide by zero in bug file")
+
+        other_file.write_text("def other():\n    return 1\n")
+        git_repo.index.add(["other.py"])
+        git_repo.index.commit("fix: divide by zero in other file")
+
+        result = runner.invoke(
+            cli,
+            [
+                "find-fix",
+                "--message",
+                "divide by zero",
+                "--path",
+                "bug.py",
+                "--repo",
+                str(test_repo),
+                "--output",
+                "json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert len(payload["candidates"]) == 1
+        assert payload["candidates"][0]["commit"] == bug_fix.hexsha
+
+    def test_find_fix_filters_candidates_by_since_days(self, runner, test_repo):
+        """测试find-fix可按时间窗口过滤候选提交"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        bug_file.write_text("def buggy():\n    return 1 / 1\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("fix: divide by zero on master")
+
+        result = runner.invoke(
+            cli,
+            [
+                "find-fix",
+                "--message",
+                "divide by zero",
+                "--since-days",
+                "0",
+                "--repo",
+                str(test_repo),
+                "--output",
+                "json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["candidates"] == []
 
     def test_doctor_reports_resolved_fix_and_target(self, runner, test_repo):
         """测试doctor可解析fix和target"""

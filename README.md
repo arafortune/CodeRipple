@@ -29,6 +29,7 @@ uv run coderipple affected --fix <fix_commit> --target <branch_or_tag_or_commit>
 
 # 先查找候选修复提交
 uv run coderipple find-fix --message "<message>"
+uv run coderipple find-fix --message "<message>" --path src/foo.py --since-days 30
 
 # 按提交信息搜索修复commit
 uv run coderipple trace --fix-message "<message>" --target <branch_or_tag_or_commit>
@@ -52,6 +53,7 @@ uv run coderipple affected --fix abc123 --target v1.0.0
 
 # 先查找候选修复提交
 uv run coderipple find-fix --message "divide by zero" --target release/v1.0
+uv run coderipple find-fix --message "divide by zero" --path bug.py --since-days 30
 
 # 使用旧位置参数形式
 uv run coderipple trace abc123 v1.0.0
@@ -85,6 +87,8 @@ uv run coderipple trace --fix abc123 --target v1.0.0 --output json --explain
 --list-fix-candidates  仅列出 --fix-message 命中的候选提交
 find-fix        独立搜索候选修复提交
 doctor          预先诊断 fix、target、config 是否可解析
+--path          在 find-fix 中仅返回直接修改过该路径的提交
+--since-days    在 find-fix 中仅返回最近 N 天内的提交
 --target        指定目标分支、tag或commit，可重复传入
 --targets-file  从文件读取多个目标版本，每行一个ref
 --repo          指定目标仓库路径

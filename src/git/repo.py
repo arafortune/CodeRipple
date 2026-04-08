@@ -3,6 +3,7 @@ Git仓库操作封装
 """
 
 from collections import defaultdict
+from datetime import datetime, timedelta
 from pathlib import Path
 import subprocess
 from typing import Dict, Iterator, Optional
@@ -93,6 +94,34 @@ class GitRepository:
             )
 
         return sorted(commits, key=sort_key, reverse=True)
+
+    def filter_commits(
+        self,
+        commits: list[git.Commit],
+        path: Optional[str] = None,
+        since_days: Optional[int] = None,
+    ) -> list[git.Commit]:
+        """按路径和时间范围过滤候选commit"""
+        filtered = commits
+        if path:
+            filtered = [commit for commit in filtered if self.commit_touches_path(commit, path)]
+        if since_days is not None:
+            cutoff = datetime.now().timestamp() - timedelta(days=since_days).total_seconds()
+            filtered = [commit for commit in filtered if commit.committed_date >= cutoff]
+        return filtered
+
+    def commit_touches_path(self, commit: git.Commit, path: str) -> bool:
+        """检查commit是否直接修改过给定路径"""
+        normalized_path = path.strip()
+        if not normalized_path:
+            return True
+        if not commit.parents:
+            return normalized_path in commit.stats.files
+
+        for diff in commit.parents[0].diff(commit):
+            if normalized_path in {diff.a_path, diff.b_path}:
+                return True
+        return False
 
     def ref_exists(self, ref: str) -> bool:
         """检查ref是否可被当前仓库解析"""

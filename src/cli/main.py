@@ -189,11 +189,17 @@ def _build_fix_candidates(
     query: str,
     target_ref: Optional[str],
     limit: int,
+    path: Optional[str] = None,
+    since_days: Optional[int] = None,
 ) -> list[dict]:
-    ranked_commits = git_repo.rank_commits_for_fix_message(
-        git_repo.find_commits_by_message(query, max_count=max(limit * 5, 50)),
-        query,
-        target_ref,
+    ranked_commits = git_repo.filter_commits(
+        git_repo.rank_commits_for_fix_message(
+            git_repo.find_commits_by_message(query, max_count=max(limit * 5, 50)),
+            query,
+            target_ref,
+        ),
+        path=path,
+        since_days=since_days,
     )
     candidates = []
     for index, commit in enumerate(ranked_commits[:limit], start=1):
@@ -203,6 +209,8 @@ def _build_fix_candidates(
                 "index": index,
                 "commit": commit.hexsha,
                 "summary": commit.summary,
+                "path_filter": path,
+                "since_days": since_days,
                 "reachable_from_target": reachable,
                 "reason": "message match ranked by summary match, recency, and target reachability",
             }
@@ -210,15 +218,25 @@ def _build_fix_candidates(
     return candidates
 
 
-def _find_fix_command(message: str, target: Optional[str], repo: str, limit: int, output: str) -> None:
+def _find_fix_command(
+    message: str,
+    target: Optional[str],
+    repo: str,
+    limit: int,
+    output: str,
+    path: Optional[str],
+    since_days: Optional[int],
+) -> None:
     git_repo = GitRepository(repo)
     if target and not git_repo.ref_exists(target):
         raise click.UsageError(f"目标版本 {target!r} 不存在或无法解析")
 
-    candidates = _build_fix_candidates(git_repo, message, target, limit)
+    candidates = _build_fix_candidates(git_repo, message, target, limit, path=path, since_days=since_days)
     payload = {
         "query": message,
         "target": target,
+        "path": path,
+        "since_days": since_days,
         "repo": str(git_repo.repo_path),
         "candidates": candidates,
     }
@@ -230,6 +248,10 @@ def _find_fix_command(message: str, target: Optional[str], repo: str, limit: int
     click.echo(f"Query: {message}")
     if target:
         click.echo(f"Target: {target}")
+    if path:
+        click.echo(f"Path: {path}")
+    if since_days is not None:
+        click.echo(f"Since days: {since_days}")
     click.echo(f"Repository: {git_repo.repo_path}")
     if not candidates:
         click.echo("No candidates found.")
@@ -677,13 +699,15 @@ def doctor(fix_commit, target, fix_option, fix_message, fix_index, target_option
 @cli.command(name="find-fix")
 @click.option("--message", required=True, help="按提交信息搜索候选修复提交")
 @click.option("--target", help="可选目标版本，用于排序时降低已在目标中可达的候选优先级")
+@click.option("--path", help="仅返回直接修改过该路径的候选提交")
+@click.option("--since-days", type=int, help="仅返回最近 N 天内的候选提交")
 @click.option("--repo", "-r", default=".", help="目标Git仓库路径，默认当前目录")
 @click.option("--limit", default=10, show_default=True, type=int, help="最多返回多少个候选提交")
 @click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式")
-def find_fix(message, target, repo, limit, output):
+def find_fix(message, target, path, since_days, repo, limit, output):
     """根据提交信息搜索候选修复提交，供后续 trace/affected 使用。"""
     try:
-        _find_fix_command(message, target, repo, limit, output)
+        _find_fix_command(message, target, repo, limit, output, path, since_days)
     except click.ClickException:
         raise
     except git.exc.InvalidGitRepositoryError:
