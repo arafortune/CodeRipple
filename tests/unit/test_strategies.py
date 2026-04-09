@@ -127,6 +127,14 @@ class TestCodeBlockStrategy:
         assert 2 in lines
         assert 4 in lines
 
+    def test_extract_removed_lines(self, strategy):
+        """测试提取删除行"""
+        diff_text = "@@ -2,3 +2,1 @@\n keep context\n-line 2 removed\n-line 3 removed\n+line 2 new"
+
+        lines = strategy._extract_removed_lines(diff_text)
+        assert 3 in lines
+        assert 4 in lines
+
     def test_extract_patch_content(self, strategy):
         """测试提取新增行和上下文行"""
         diff_text = """@@ -1,3 +1,4 @@
@@ -196,6 +204,31 @@ class TestCodeBlockStrategy:
 
         assert result.found is True
         assert result.details["file"] == "src/legacy.py"
+
+    def test_trace_found_for_deletion_only_fix(self, strategy, test_repo):
+        """测试仅通过删除buggy代码修复时，code_block仍可追溯"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Baseline")
+
+        bug_file.write_text("def buggy():\n    print('debug')\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce debug line bug")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        git_repo.git.checkout("master")
+
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("Remove debug line")
+
+        result = strategy.trace(fix_commit.hexsha, "release/v1.0")
+
+        assert result.found is True
+        assert result.method == "code_block"
     
     def test_priority(self, strategy):
         assert strategy.priority == 2

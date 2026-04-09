@@ -28,6 +28,7 @@ class PatchCandidate:
 
     file_path: str
     added_lines: List[str]
+    removed_lines: List[str]
     context_lines: List[str]
     line_numbers: List[int]
     source: str
@@ -87,12 +88,13 @@ class CodeBlockStrategy(TraceStrategy):
 
         for candidate in self._build_patch_candidates(commit.parents[0].diff(commit, create_patch=True)):
             if candidate.line_numbers:
+                source_lines = candidate.added_lines or candidate.removed_lines
                 return CodeBlock(
                     file_path=candidate.file_path,
                     start_line=min(candidate.line_numbers),
                     end_line=max(candidate.line_numbers),
-                    content=self._get_code_at_lines(commit, candidate.file_path, candidate.line_numbers),
-                    lines=self._get_lines_at_lines(commit, candidate.file_path, candidate.line_numbers),
+                    content="\n".join(source_lines),
+                    lines=source_lines,
                     context_lines=candidate.context_lines,
                 )
 
@@ -121,6 +123,30 @@ class CodeBlockStrategy(TraceStrategy):
             else:
                 current_line += 1
         return added_lines
+
+    def _extract_removed_lines(self, diff_text: str) -> List[int]:
+        """从diff中提取删除的行号"""
+        removed_lines: List[int] = []
+        current_line = 0
+
+        for line in diff_text.split("\n"):
+            if line.startswith("@@"):
+                parts = line.split(" ")
+                if len(parts) < 2:
+                    continue
+                minus_part = parts[1]
+                try:
+                    current_line = int(minus_part[1:].split(",")[0])
+                except ValueError:
+                    current_line = 0
+            elif line.startswith("-") and not line.startswith("---"):
+                removed_lines.append(current_line)
+                current_line += 1
+            elif line.startswith("+") and not line.startswith("+++"):
+                continue
+            else:
+                current_line += 1
+        return removed_lines
 
     def _get_code_at_lines(self, commit, file_path: str, lines: List[int]) -> str:
         """获取指定行的代码"""
@@ -159,14 +185,17 @@ class CodeBlockStrategy(TraceStrategy):
 
         for diff in diffs:
             added_lines, context_lines = self._extract_patch_content(diff)
+            removed_lines = self._extract_removed_content(diff)
+            line_numbers = self._extract_added_lines(self._to_text(diff.diff)) or self._extract_removed_lines(self._to_text(diff.diff))
 
-            if added_lines:
+            if added_lines or removed_lines:
                 candidates.append(
                     PatchCandidate(
                         file_path=diff.b_path or diff.a_path or "",
                         added_lines=added_lines,
+                        removed_lines=removed_lines,
                         context_lines=context_lines,
-                        line_numbers=self._extract_added_lines(self._to_text(diff.diff)),
+                        line_numbers=line_numbers,
                         source="direct",
                     )
                 )
@@ -217,6 +246,7 @@ class CodeBlockStrategy(TraceStrategy):
                 PatchCandidate(
                     file_path=added_path,
                     added_lines=added_lines,
+                    removed_lines=[],
                     context_lines=context_lines,
                     line_numbers=line_numbers,
                     source="paired_move",

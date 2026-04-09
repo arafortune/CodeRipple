@@ -105,6 +105,31 @@ class TestTracerFlow:
         assert result.found is True
         assert result.method in ["code_block", "ast_structure", "similarity"]
 
+    def test_deletion_only_fix_reports_affected_via_code_block(self, tracer, test_repo):
+        """测试通过删除buggy代码修复时，第二层code_block仍可命中"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Baseline")
+
+        bug_file.write_text("def buggy():\n    print('debug')\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        git_repo.git.checkout("-b", "release/test")
+        git_repo.git.checkout("master")
+
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        fix_commit = git_repo.index.commit("Remove debug line")
+
+        result = tracer.trace(fix_commit.hexsha, "release/test")
+
+        assert result.found is True
+        assert result.method == "code_block"
+
     def test_target_without_bug_code_reports_not_affected(self, tracer, test_repo):
         """测试目标版本不存在引入bug的代码时不应仅因缺少fix而判定受影响"""
         git_repo = git.Repo(test_repo)
