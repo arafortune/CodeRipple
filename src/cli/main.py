@@ -17,7 +17,13 @@ from src.git.repo import GitRepository
 @click.group()
 @click.version_option(version="0.1.0")
 def cli():
-    """CodeRipple - Git历史分析工具。分析目标版本是否仍受某个修复提交对应的Bug影响。"""
+    """CodeRipple - Git历史分析工具。
+
+    提供三类核心能力：
+    1. `trace` / `affected`：分析目标版本是否仍受Bug影响
+    2. `find-fix`：先搜索候选修复提交
+    3. `doctor`：先诊断 fix、target、config 是否可解析
+    """
     return None
 
 
@@ -563,8 +569,8 @@ def _trace_command(
 @click.option("--targets-file", help="从文件读取多个目标版本，每行一个ref，支持#注释")
 @click.option("--repo", "-r", default=".", help="目标Git仓库路径，默认当前目录")
 @click.option("--config", "-c", default="config/coderipple.yaml", help="配置文件路径")
-@click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式")
-@click.option("--explain", is_flag=True, help="输出结构化分析过程")
+@click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式；json 会包含 status，--explain 时会附带 analysis")
+@click.option("--explain", is_flag=True, help="输出结构化分析过程，包括各策略的 status / summary / evidence")
 def trace(
     fix_commit,
     target,
@@ -588,6 +594,11 @@ def trace(
       coderipple trace --fix <fix_commit> --target <target>
       coderipple trace --fix-message "<message>" --target <target>
       coderipple trace --fix <fix_commit> --target <target1> --target <target2>
+
+    输出状态：
+      affected: 目标版本仍受影响
+      not_affected: 目标版本已包含修复或等价修复
+      unknown: 当前策略无法确认目标版本是否受影响
     """
     try:
         _trace_command(
@@ -622,8 +633,8 @@ def trace(
 @click.option("--targets-file", help="从文件读取多个目标版本，每行一个ref，支持#注释")
 @click.option("--repo", "-r", default=".", help="目标Git仓库路径，默认当前目录")
 @click.option("--config", "-c", default="config/coderipple.yaml", help="配置文件路径")
-@click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式")
-@click.option("--explain", is_flag=True, help="输出结构化分析过程")
+@click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式；json 会包含 status，--explain 时会附带 analysis")
+@click.option("--explain", is_flag=True, help="输出结构化分析过程，包括各策略的 status / summary / evidence")
 def affected(
     fix_commit,
     target,
@@ -670,10 +681,10 @@ def affected(
 @click.option("--target", "target_options", multiple=True, help="目标分支、tag或commit，可重复传入以批量诊断")
 @click.option("--targets-file", help="从文件读取多个目标版本，每行一个ref，支持#注释")
 @click.option("--repo", "-r", default=".", help="目标Git仓库路径，默认当前目录")
-@click.option("--config", "-c", default="config/coderipple.yaml", help="配置文件路径")
-@click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式")
+@click.option("--config", "-c", default="config/coderipple.yaml", help="配置文件路径；doctor 会提前校验是否可解析")
+@click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式；json 会返回 repo / config / fix / targets 的诊断结果")
 def doctor(fix_commit, target, fix_option, fix_message, fix_index, target_options, targets_file, repo, config, output):
-    """检查仓库、fix 和 target 是否都能被正确解析，提前暴露歧义和输入错误。"""
+    """检查仓库、fix、targets 和 config 是否都能被正确解析，提前暴露歧义和输入错误。"""
     try:
         _doctor_command(
             fix_commit,
@@ -698,14 +709,17 @@ def doctor(fix_commit, target, fix_option, fix_message, fix_index, target_option
 
 @cli.command(name="find-fix")
 @click.option("--message", required=True, help="按提交信息搜索候选修复提交")
-@click.option("--target", help="可选目标版本，用于排序时降低已在目标中可达的候选优先级")
+@click.option("--target", help="可选目标版本；排序时会降低已在目标中可达的候选优先级")
 @click.option("--path", help="仅返回直接修改过该路径的候选提交")
 @click.option("--since-days", type=int, help="仅返回最近 N 天内的候选提交")
 @click.option("--repo", "-r", default=".", help="目标Git仓库路径，默认当前目录")
 @click.option("--limit", default=10, show_default=True, type=int, help="最多返回多少个候选提交")
-@click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式")
+@click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式；json 会返回候选列表和排序上下文")
 def find_fix(message, target, path, since_days, repo, limit, output):
-    """根据提交信息搜索候选修复提交，供后续 trace/affected 使用。"""
+    """根据提交信息搜索候选修复提交，供后续 trace/affected 使用。
+
+    候选默认按摘要匹配度、提交时间、以及相对 target 的可达性综合排序。
+    """
     try:
         _find_fix_command(message, target, repo, limit, output, path, since_days)
     except click.ClickException:

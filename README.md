@@ -5,8 +5,12 @@ Git历史分析工具 - 追溯bug是否影响目标版本
 ## 功能
 
 - 检查目标版本是否仍受某个修复提交对应的Bug影响
+- 显式输出结果状态：`affected`、`not_affected`、`unknown`
 - 支持文件移动、功能重构
 - 多种追溯策略：commit链、代码块、AST结构、相似度搜索
+- 支持批量分析多个目标版本
+- 支持 `find-fix` 独立搜索候选修复提交
+- 支持 `doctor` 预先诊断 fix、target、config 是否可解析
 - 支持按修复提交、提交信息、分支、tag、commit sha 进行分析
 - 支持输出结构化分析过程
 
@@ -21,29 +25,40 @@ uv sync
 ### 基本用法
 
 ```bash
-# 兼容旧用法：按 fix commit 和目标ref 追溯
+# 1. 兼容旧用法：按 fix commit 和目标ref 追溯
 uv run coderipple trace <fix_commit> <target_tag_or_branch>
 
-# 更推荐的显式参数形式
+# 2. 更推荐的显式参数形式
 uv run coderipple affected --fix <fix_commit> --target <branch_or_tag_or_commit>
 
-# 先查找候选修复提交
+# 3. 先查找候选修复提交
 uv run coderipple find-fix --message "<message>"
 uv run coderipple find-fix --message "<message>" --path src/foo.py --since-days 30
 
-# 按提交信息搜索修复commit
+# 4. 按提交信息搜索修复commit
 uv run coderipple trace --fix-message "<message>" --target <branch_or_tag_or_commit>
 
-# 列出提交信息命中的候选修复提交
+# 5. 列出提交信息命中的候选修复提交
 uv run coderipple trace --fix-message "<message>" --list-fix-candidates --target <branch_or_tag_or_commit>
 
-# 先诊断fix、target和配置是否都可解析
+# 6. 先诊断fix、target和配置是否都可解析
 uv run coderipple doctor --fix <fix_commit> --target <branch_or_tag_or_commit>
 
-# 批量分析多个目标版本
+# 7. 批量分析多个目标版本
 uv run coderipple affected --fix <fix_commit> --target <ref1> --target <ref2>
 uv run coderipple affected --fix <fix_commit> --targets-file targets.txt
 ```
+
+### 子命令
+
+`trace` / `affected`
+用于判断目标版本是否仍受影响。JSON 输出会包含顶层 `status`，`--explain` 时还会附带 `analysis`。
+
+`find-fix`
+用于先独立搜索候选修复提交。可用 `--target`、`--path`、`--since-days` 缩小范围。
+
+`doctor`
+用于在真正执行 `trace` 前，先诊断仓库、配置、fix 和多个 targets 是否都能被正确解析。
 
 ### 示例
 
@@ -80,21 +95,52 @@ uv run coderipple trace --fix abc123 --target v1.0.0 --output json --explain
 
 ### 参数说明
 
+#### trace / affected
+
 ```bash
 --fix           显式指定修复commit
 --fix-message   按提交信息搜索修复commit
 --fix-index     当 --fix-message 命中多个候选时，选择第几个候选
 --list-fix-candidates  仅列出 --fix-message 命中的候选提交
-find-fix        独立搜索候选修复提交
-doctor          预先诊断 fix、target、config 是否可解析
---path          在 find-fix 中仅返回直接修改过该路径的提交
---since-days    在 find-fix 中仅返回最近 N 天内的提交
 --target        指定目标分支、tag或commit，可重复传入
 --targets-file  从文件读取多个目标版本，每行一个ref
 --repo          指定目标仓库路径
 --output        table 或 json
 --explain       输出结构化分析过程
 ```
+
+#### find-fix
+
+```bash
+--message       按提交信息搜索候选修复提交
+--target        可选目标版本，用于排序时降低已在目标中可达的候选优先级
+--path          仅返回直接修改过该路径的提交
+--since-days    仅返回最近 N 天内的提交
+--limit         控制最多返回多少个候选
+--repo          指定目标仓库路径
+--output        table 或 json
+```
+
+#### doctor
+
+```bash
+--fix / --fix-message / --fix-index
+--target / --targets-file
+--repo
+--config
+--output
+```
+
+### 输出状态
+
+`affected`
+目标版本仍受影响，已经找到直接证据。
+
+`not_affected`
+目标版本已包含修复或等价修复。
+
+`unknown`
+当前策略既没有确认受影响，也没有确认已修复。
 
 ## 开发
 
