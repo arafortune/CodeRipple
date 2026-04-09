@@ -302,6 +302,47 @@ class TestCLI:
         assert payload["status"] == "affected"
         assert payload["affected"] is True
 
+    def test_trace_resolves_old_fix_by_message_beyond_previous_search_limit(self, runner, test_repo):
+        """测试--fix-message不会因固定搜索上限漏掉较早的commit"""
+        git_repo = git.Repo(test_repo)
+
+        bug_file = test_repo / "bug.py"
+        bug_file.write_text("def buggy():\n    return 1 / 0\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("Introduce bug")
+
+        git_repo.git.checkout("-b", "release/v1.0")
+        git_repo.git.checkout("master")
+
+        bug_file.write_text("def buggy():\n    return 1 / 1\n")
+        git_repo.index.add(["bug.py"])
+        git_repo.index.commit("fix: handle deep history divide by zero")
+
+        filler = test_repo / "filler.txt"
+        for index in range(520):
+            filler.write_text(f"commit {index}\n")
+            git_repo.index.add(["filler.txt"])
+            git_repo.index.commit(f"filler commit {index}")
+
+        result = runner.invoke(
+            cli,
+            [
+                "trace",
+                "--fix-message",
+                "deep history divide by zero",
+                "--target",
+                "release/v1.0",
+                "--repo",
+                str(test_repo),
+                "--output",
+                "json",
+            ],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["affected"] is True
+
     def test_trace_lists_fix_message_candidates(self, runner, test_repo):
         """测试可列出fix-message候选提交"""
         git_repo = git.Repo(test_repo)

@@ -54,13 +54,13 @@ class GitRepository:
         """迭代commit"""
         return self.repo.iter_commits(ref, max_count=max_count)
 
-    def find_commit_by_message(self, query: str, max_count: int = 500) -> Optional[git.Commit]:
+    def find_commit_by_message(self, query: str, max_count: Optional[int] = None) -> Optional[git.Commit]:
         """按提交信息搜索最近的commit"""
         matches = self.find_commits_by_message(query, max_count=max_count)
         return matches[0] if matches else None
 
-    def find_commits_by_message(self, query: str, max_count: int = 500) -> list[git.Commit]:
-        """按提交信息搜索最近的commit列表"""
+    def find_commits_by_message(self, query: str, max_count: Optional[int] = None) -> list[git.Commit]:
+        """按提交信息搜索commit列表；默认不截断搜索范围"""
         normalized_query = query.strip().lower()
         if not normalized_query:
             return []
