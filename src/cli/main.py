@@ -20,7 +20,7 @@ def cli():
     """CodeRipple - Git历史分析工具。
 
     提供三类核心能力：
-    1. `trace` / `affected`：分析目标版本是否仍受Bug影响
+    1. `affected`：分析目标版本是否仍受Bug影响
     2. `find-fix`：先搜索候选修复提交
     3. `doctor`：先诊断 fix、target、config 是否可解析
     """
@@ -631,66 +631,11 @@ def _trace_command(
         click.echo()
 
 
-@cli.command(name="trace")
-@click.option("--fix", required=False, help="显式指定修复commit")
-@click.option("--fix-message", help="按提交信息搜索修复commit，例如 --fix-message 'divide by zero'")
-@click.option("--fix-index", default=0, type=int, help="当 --fix-message 命中多个候选时，选择第几个候选")
-@click.option("--list-fix-candidates", is_flag=True, help="仅列出 --fix-message 命中的候选提交，不执行trace")
-@click.option("--target", "target_options", multiple=True, help="目标分支、tag或commit，可重复传入以批量分析")
-@click.option("--targets-file", help="从文件读取多个目标版本，每行一个ref，支持#注释")
-@click.option("--repo", "-r", default=".", help="目标Git仓库路径，默认当前目录")
-@click.option("--config", "-c", default="config/coderipple.yaml", help="配置文件路径")
-@click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式；json 会包含 status，--explain 时会附带 analysis")
-@click.option("--explain", is_flag=True, help="输出结构化分析过程，包括各策略的 status / summary / evidence")
-def trace(
-    fix,
-    fix_message,
-    fix_index,
-    list_fix_candidates,
-    target_options,
-    targets_file,
-    repo,
-    config,
-    output,
-    explain,
-):
-    """追溯目标版本是否仍受某个修复提交对应的Bug影响。
-
-    推荐参数形式：
-      coderipple trace --fix <fix_commit> --target <target>
-      coderipple trace --fix-message "<message>" --target <target>
-      coderipple trace --fix <fix_commit> --target <target1> --target <target2>
-
-    输出状态：
-      affected: 目标版本仍受影响
-      not_affected: 目标版本已包含修复或等价修复
-      unknown: 当前策略无法确认目标版本是否受影响
-    """
-    try:
-        _trace_command(
-            fix,
-            target_options,
-            targets_file,
-            fix_message,
-            repo,
-            config,
-            output,
-            explain,
-            fix_index,
-            list_fix_candidates,
-        )
-    except click.ClickException:
-        raise
-    except Exception as e:
-        click.echo(f"错误: {e}", err=True)
-        raise click.Abort()
-
-
 @cli.command(name="affected")
 @click.option("--fix", required=False, help="显式指定修复commit")
 @click.option("--fix-message", help="按提交信息搜索修复commit，例如 --fix-message 'divide by zero'")
 @click.option("--fix-index", default=0, type=int, help="当 --fix-message 命中多个候选时，选择第几个候选")
-@click.option("--list-fix-candidates", is_flag=True, help="仅列出 --fix-message 命中的候选提交，不执行trace")
+@click.option("--list-fix-candidates", is_flag=True, help="仅列出 --fix-message 命中的候选提交，不执行分析")
 @click.option("--target", "target_options", multiple=True, help="目标分支、tag或commit，可重复传入以批量分析")
 @click.option("--targets-file", help="从文件读取多个目标版本，每行一个ref，支持#注释")
 @click.option("--repo", "-r", default=".", help="目标Git仓库路径，默认当前目录")
@@ -709,7 +654,18 @@ def affected(
     output,
     explain,
 ):
-    """`trace` 的直观别名，直接表达目标版本是否受影响。"""
+    """分析目标版本是否仍受某个修复提交对应的 Bug 影响。
+
+    推荐参数形式：
+      coderipple affected --fix <fix_commit> --target <target>
+      coderipple affected --fix-message "<message>" --target <target>
+      coderipple affected --fix <fix_commit> --target <target1> --target <target2>
+
+    输出状态：
+      affected: 目标版本仍受影响
+      not_affected: 目标版本已包含修复或等价修复
+      unknown: 当前策略无法确认目标版本是否受影响
+    """
     try:
         _trace_command(
             fix,
@@ -770,7 +726,7 @@ def doctor(fix, fix_message, fix_index, target_options, targets_file, repo, conf
 @click.option("--limit", default=10, show_default=True, type=int, help="最多返回多少个候选提交")
 @click.option("--output", "-o", default="table", type=click.Choice(["table", "json"]), help="输出格式；json 会返回候选列表和排序上下文")
 def find_fix(message, target, path, since_days, repo, limit, output):
-    """根据提交信息搜索候选修复提交，供后续 trace/affected 使用。
+    """根据提交信息搜索候选修复提交，供后续 affected 使用。
 
     候选默认按摘要匹配度、提交时间、以及相对 target 的可达性综合排序。
     """

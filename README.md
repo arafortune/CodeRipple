@@ -33,10 +33,10 @@ uv run coderipple find-fix --message "<message>"
 uv run coderipple find-fix --message "<message>" --path src/foo.py --since-days 30
 
 # 3. 按提交信息搜索修复commit
-uv run coderipple trace --fix-message "<message>" --target <branch_or_tag_or_commit>
+uv run coderipple affected --fix-message "<message>" --target <branch_or_tag_or_commit>
 
 # 4. 列出提交信息命中的候选修复提交
-uv run coderipple trace --fix-message "<message>" --list-fix-candidates --target <branch_or_tag_or_commit>
+uv run coderipple affected --fix-message "<message>" --list-fix-candidates --target <branch_or_tag_or_commit>
 
 # 5. 先诊断fix、target和配置是否都可解析
 uv run coderipple doctor --fix <fix_commit> --target <branch_or_tag_or_commit>
@@ -48,14 +48,14 @@ uv run coderipple affected --fix <fix_commit> --targets-file targets.txt
 
 ### 子命令
 
-`trace` / `affected`
+`affected`
 用于判断目标版本是否仍受影响。JSON 输出会包含顶层 `status`，`--explain` 时还会附带 `analysis`。
 
 `find-fix`
 用于先独立搜索候选修复提交。可用 `--target`、`--path`、`--since-days` 缩小范围。
 
 `doctor`
-用于在真正执行 `trace` 前，先诊断仓库、配置、fix 和多个 targets 是否都能被正确解析。
+用于在真正执行 `affected` 前，先诊断仓库、配置、fix 和多个 targets 是否都能被正确解析。
 
 ### 示例
 
@@ -68,11 +68,11 @@ uv run coderipple find-fix --message "divide by zero" --target release/v1.0
 uv run coderipple find-fix --message "divide by zero" --path bug.py --since-days 30
 
 # 按提交信息搜索修复commit
-uv run coderipple trace --fix-message "divide by zero" --target release/v1.0
+uv run coderipple affected --fix-message "divide by zero" --target release/v1.0
 
 # 当fix-message命中多个候选时，先列候选，再按序号选择
-uv run coderipple trace --fix-message "divide by zero" --list-fix-candidates --target release/v1.0
-uv run coderipple trace --fix-message "divide by zero" --fix-index 2 --target release/v1.0
+uv run coderipple affected --fix-message "divide by zero" --list-fix-candidates --target release/v1.0
+uv run coderipple affected --fix-message "divide by zero" --fix-index 2 --target release/v1.0
 
 # 先批量诊断多个目标版本和配置
 uv run coderipple doctor --fix abc123 --target release/v1.0 --target v1.0.1 --config config/coderipple.yaml
@@ -84,12 +84,12 @@ uv run coderipple affected --fix abc123 --target release/v1.0 --target v1.0.1
 uv run coderipple affected --fix abc123 --targets-file targets.txt
 
 # 输出JSON格式并附带结构化分析过程
-uv run coderipple trace --fix abc123 --target v1.0.0 --output json --explain
+uv run coderipple affected --fix abc123 --target v1.0.0 --output json --explain
 ```
 
 ### 参数说明
 
-#### trace / affected
+#### affected
 
 ```bash
 --fix           显式指定修复commit

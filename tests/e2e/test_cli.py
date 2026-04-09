@@ -30,9 +30,9 @@ class TestCLI:
         assert result.exit_code == 0
         assert "CodeRipple" in result.output
 
-    def test_trace_help(self, runner):
-        """测试trace命令帮助"""
-        result = runner.invoke(cli, ["trace", "--help"])
+    def test_affected_help(self, runner):
+        """测试affected命令帮助"""
+        result = runner.invoke(cli, ["affected", "--help"])
         assert result.exit_code == 0
         assert "--fix" in result.output
         assert "--target" in result.output
@@ -41,13 +41,6 @@ class TestCLI:
         assert "--fix-index" in result.output
         assert "--list-fix-candidates" in result.output
         assert "--explain" in result.output
-
-    def test_affected_help(self, runner):
-        """测试affected别名帮助"""
-        result = runner.invoke(cli, ["affected", "--help"])
-        assert result.exit_code == 0
-        assert "直观别名" in result.output or "affected" in result.output
-        assert "--targets-file" in result.output
 
     def test_doctor_help(self, runner):
         """测试doctor命令帮助"""
@@ -70,9 +63,9 @@ class TestCLI:
         assert "--since-days" in result.output
         assert "--limit" in result.output
 
-    def test_trace_not_found_shows_strategy_summary(self, runner):
+    def test_affected_not_found_shows_strategy_summary(self, runner):
         """测试未命中时输出策略摘要"""
-        result = runner.invoke(cli, ["trace", "--fix", "deadbeef", "--target", "master"])
+        result = runner.invoke(cli, ["affected", "--fix", "deadbeef", "--target", "master"])
         assert result.exit_code != 0 or "策略摘要" in result.output or "错误:" in result.output
 
     def test_trace_reports_affected_for_release_branch(self, runner, test_repo):
@@ -93,7 +86,7 @@ class TestCLI:
 
         result = runner.invoke(
             cli,
-            ["trace", "--fix", fix_commit.hexsha, "--target", "release/v1.0", "--repo", str(test_repo)],
+            ["affected", "--fix", fix_commit.hexsha, "--target", "release/v1.0", "--repo", str(test_repo)],
         )
 
         assert result.exit_code == 0
@@ -101,8 +94,8 @@ class TestCLI:
         assert "方法:" in result.output
         assert "尝试策略数:" in result.output
 
-    def test_trace_accepts_fix_and_target_options(self, runner, test_repo):
-        """测试trace使用显式 --fix 和 --target"""
+    def test_affected_accepts_fix_and_target_options(self, runner, test_repo):
+        """测试affected使用显式 --fix 和 --target"""
         git_repo = git.Repo(test_repo)
 
         bug_file = test_repo / "bug.py"
@@ -120,7 +113,7 @@ class TestCLI:
         result = runner.invoke(
             cli,
             [
-                "trace",
+                "affected",
                 "--fix",
                 fix_commit.hexsha,
                 "--target",
@@ -133,8 +126,8 @@ class TestCLI:
         assert result.exit_code == 0
         assert "✓ Bug存在于目标版本" in result.output
 
-    def test_affected_alias_works(self, runner, test_repo):
-        """测试affected命令别名"""
+    def test_affected_works(self, runner, test_repo):
+        """测试affected命令"""
         git_repo = git.Repo(test_repo)
 
         bug_file = test_repo / "bug.py"
@@ -182,7 +175,7 @@ class TestCLI:
         result = runner.invoke(
             cli,
             [
-                "trace",
+                "affected",
                 "--fix",
                 fix_commit.hexsha,
                 "--target",
@@ -204,7 +197,7 @@ class TestCLI:
         assert payload["details"]["attempts"][0]["method"] == "commit_chain"
         assert payload["details"]["attempts"][0]["found"] is False
 
-    def test_trace_accepts_commit_sha_as_target(self, runner, test_repo):
+    def test_affected_accepts_commit_sha_as_target(self, runner, test_repo):
         """测试目标可直接使用commit sha"""
         git_repo = git.Repo(test_repo)
 
@@ -219,14 +212,14 @@ class TestCLI:
 
         result = runner.invoke(
             cli,
-            ["trace", "--fix", fix_commit.hexsha, "--target", release_commit.hexsha, "--repo", str(test_repo)],
+            ["affected", "--fix", fix_commit.hexsha, "--target", release_commit.hexsha, "--repo", str(test_repo)],
         )
 
         assert result.exit_code == 0
         assert "✓ Bug存在于目标版本" in result.output
         assert "Commit:" in result.output
 
-    def test_trace_reports_not_affected_when_target_never_had_bug(self, runner, test_repo):
+    def test_affected_reports_not_affected_when_target_never_had_bug(self, runner, test_repo):
         """测试目标版本从未引入bug代码时不应仅因缺少fix而判定受影响"""
         git_repo = git.Repo(test_repo)
 
@@ -249,7 +242,7 @@ class TestCLI:
         result = runner.invoke(
             cli,
             [
-                "trace",
+                "affected",
                 "--fix",
                 fix_commit.hexsha,
                 "--target",
@@ -268,7 +261,7 @@ class TestCLI:
         assert payload["details"]["attempts"][0]["method"] == "commit_chain"
         assert payload["details"]["attempts"][0]["found"] is False
 
-    def test_trace_resolves_fix_by_message(self, runner, test_repo):
+    def test_affected_resolves_fix_by_message(self, runner, test_repo):
         """测试可通过--fix-message解析修复提交"""
         git_repo = git.Repo(test_repo)
 
@@ -287,7 +280,7 @@ class TestCLI:
         result = runner.invoke(
             cli,
             [
-                "trace",
+                "affected",
                 "--fix-message",
                 "divide by zero",
                 "--target",
@@ -304,7 +297,7 @@ class TestCLI:
         assert payload["status"] == "affected"
         assert payload["affected"] is True
 
-    def test_trace_resolves_old_fix_by_message_beyond_previous_search_limit(self, runner, test_repo):
+    def test_affected_resolves_old_fix_by_message_beyond_previous_search_limit(self, runner, test_repo):
         """测试--fix-message不会因固定搜索上限漏掉较早的commit"""
         git_repo = git.Repo(test_repo)
 
@@ -329,7 +322,7 @@ class TestCLI:
         result = runner.invoke(
             cli,
             [
-                "trace",
+                "affected",
                 "--fix-message",
                 "deep history divide by zero",
                 "--target",
@@ -345,7 +338,7 @@ class TestCLI:
         payload = json.loads(result.output)
         assert payload["affected"] is True
 
-    def test_trace_lists_fix_message_candidates(self, runner, test_repo):
+    def test_affected_lists_fix_message_candidates(self, runner, test_repo):
         """测试可列出fix-message候选提交"""
         git_repo = git.Repo(test_repo)
 
@@ -365,7 +358,7 @@ class TestCLI:
         result = runner.invoke(
             cli,
             [
-                "trace",
+                "affected",
                 "--fix-message",
                 "divide by zero",
                 "--list-fix-candidates",
@@ -381,7 +374,7 @@ class TestCLI:
         assert "1." in result.output
         assert "--fix-index" in result.output
 
-    def test_trace_selects_fix_message_candidate_by_index(self, runner, test_repo):
+    def test_affected_selects_fix_message_candidate_by_index(self, runner, test_repo):
         """测试可通过fix-index选择fix-message候选"""
         git_repo = git.Repo(test_repo)
 
@@ -410,7 +403,7 @@ class TestCLI:
         result = runner.invoke(
             cli,
             [
-                "trace",
+                "affected",
                 "--fix-message",
                 "divide by zero",
                 "--fix-index",
@@ -799,7 +792,7 @@ class TestCLI:
         payload = json.loads(result.output)
         assert payload["config"]["ok"] is False
 
-    def test_trace_json_explain_output(self, runner, test_repo):
+    def test_affected_json_explain_output(self, runner, test_repo):
         """测试--explain会在JSON中输出结构化分析过程"""
         git_repo = git.Repo(test_repo)
 
@@ -822,7 +815,7 @@ class TestCLI:
         result = runner.invoke(
             cli,
             [
-                "trace",
+                "affected",
                 "--fix",
                 fix_commit.hexsha,
                 "--target",
@@ -850,7 +843,7 @@ class TestCLI:
         assert "summary" in payload["analysis"]["strategies"][0]
         assert "evidence" in payload["analysis"]["strategies"][0]
 
-    def test_trace_table_explain_output_uses_unified_summary(self, runner, test_repo):
+    def test_affected_table_explain_output_uses_unified_summary(self, runner, test_repo):
         """测试table explain输出使用统一的summary格式"""
         git_repo = git.Repo(test_repo)
 
@@ -869,7 +862,7 @@ class TestCLI:
         result = runner.invoke(
             cli,
             [
-                "trace",
+                "affected",
                 "--fix",
                 fix_commit.hexsha,
                 "--target",
@@ -887,7 +880,7 @@ class TestCLI:
         assert "final_decision:" in result.output
         assert "evidence=" in result.output
 
-    def test_trace_table_output_shows_unknown_status(self, runner, test_repo):
+    def test_affected_table_output_shows_unknown_status(self, runner, test_repo):
         """测试未命中修复且未找到bug证据时table输出显示unknown状态"""
         git_repo = git.Repo(test_repo)
 
@@ -909,14 +902,14 @@ class TestCLI:
 
         result = runner.invoke(
             cli,
-            ["trace", "--fix", fix_commit.hexsha, "--target", "release/v1.0", "--repo", str(test_repo)],
+            ["affected", "--fix", fix_commit.hexsha, "--target", "release/v1.0", "--repo", str(test_repo)],
         )
 
         assert result.exit_code == 0
         assert "? 无法确认目标版本是否受影响" in result.output
         assert "状态: unknown" in result.output
 
-    def test_trace_supports_multiple_targets_in_json_output(self, runner, test_repo):
+    def test_affected_supports_multiple_targets_in_json_output(self, runner, test_repo):
         """测试可通过重复--target批量分析多个目标版本"""
         git_repo = git.Repo(test_repo)
 
@@ -936,7 +929,7 @@ class TestCLI:
         result = runner.invoke(
             cli,
             [
-                "trace",
+                "affected",
                 "--fix",
                 fix_commit.hexsha,
                 "--target",
@@ -959,7 +952,7 @@ class TestCLI:
         assert payload["targets"][1]["target"] == "v1.0.1"
         assert payload["targets"][1]["affected"] is False
 
-    def test_trace_supports_targets_file(self, runner, test_repo):
+    def test_affected_supports_targets_file(self, runner, test_repo):
         """测试可通过targets file批量分析多个目标版本"""
         git_repo = git.Repo(test_repo)
 
@@ -996,7 +989,7 @@ class TestCLI:
         assert "Target: release/v1.0" in result.output
         assert "Target: v1.0.1" in result.output
 
-    def test_trace_detects_affected_after_file_move(self, runner, test_repo):
+    def test_affected_detects_affected_after_file_move(self, runner, test_repo):
         """测试真实CLI下文件移动后的修复仍可判定旧分支受影响"""
         git_repo = git.Repo(test_repo)
 
@@ -1019,13 +1012,13 @@ class TestCLI:
 
         result = runner.invoke(
             cli,
-            ["trace", "--fix", fix_commit.hexsha, "--target", "release/v1.0", "--repo", str(test_repo)],
+            ["affected", "--fix", fix_commit.hexsha, "--target", "release/v1.0", "--repo", str(test_repo)],
         )
 
         assert result.exit_code == 0
         assert "✓ Bug存在于目标版本" in result.output
 
-    def test_trace_json_output_handles_code_block_matches(self, runner, test_repo):
+    def test_affected_json_output_handles_code_block_matches(self, runner, test_repo):
         """测试JSON输出在命中后续策略时不会因循环引用失败"""
         git_repo = git.Repo(test_repo)
 
@@ -1048,7 +1041,7 @@ class TestCLI:
         result = runner.invoke(
             cli,
             [
-                "trace",
+                "affected",
                 "--fix",
                 fix_commit.hexsha,
                 "--target",
@@ -1065,7 +1058,7 @@ class TestCLI:
         assert payload["affected"] is True
         assert payload["details"]["attempts"][0]["method"] == "commit_chain"
 
-    def test_trace_reports_not_affected_for_backported_fix(self, runner, test_repo):
+    def test_affected_reports_not_affected_for_backported_fix(self, runner, test_repo):
         """测试cherry-pick回补修复后，CLI应判定目标版本不再受影响"""
         git_repo = git.Repo(test_repo)
 
@@ -1091,7 +1084,7 @@ class TestCLI:
         result = runner.invoke(
             cli,
             [
-                "trace",
+                "affected",
                 "--fix",
                 fix_commit.hexsha,
                 "--target",
@@ -1109,7 +1102,7 @@ class TestCLI:
         assert payload["details"]["reason"] == "equivalent fix patch already exists in target ref"
         assert payload["details"]["equivalent_commit"] == git_repo.head.commit.hexsha
 
-    def test_trace_reports_affected_for_partial_backport(self, runner, test_repo):
+    def test_affected_reports_affected_for_partial_backport(self, runner, test_repo):
         """测试部分回补修复时，CLI仍应判定目标版本受影响"""
         git_repo = git.Repo(test_repo)
 
@@ -1137,7 +1130,7 @@ class TestCLI:
         result = runner.invoke(
             cli,
             [
-                "trace",
+                "affected",
                 "--fix",
                 fix_commit.hexsha,
                 "--target",
@@ -1154,7 +1147,7 @@ class TestCLI:
         assert payload["affected"] is True
         assert payload["method"] in ["code_block", "ast_structure", "similarity"]
 
-    def test_trace_reports_not_affected_for_split_backport_with_same_final_state(self, runner, test_repo):
+    def test_affected_reports_not_affected_for_split_backport_with_same_final_state(self, runner, test_repo):
         """测试拆分回补但最终文件状态一致时，CLI应判定目标版本不再受影响"""
         git_repo = git.Repo(test_repo)
 
@@ -1185,7 +1178,7 @@ class TestCLI:
         result = runner.invoke(
             cli,
             [
-                "trace",
+                "affected",
                 "--fix",
                 fix_commit.hexsha,
                 "--target",
@@ -1202,7 +1195,7 @@ class TestCLI:
         assert payload["affected"] is False
         assert payload["details"]["reason"] == "equivalent fixed file state already exists in target ref"
 
-    def test_trace_reports_not_affected_for_backport_after_path_change(self, runner, test_repo):
+    def test_affected_reports_not_affected_for_backport_after_path_change(self, runner, test_repo):
         """测试文件移动后的修复在旧路径回补时，CLI应判定目标版本不再受影响"""
         git_repo = git.Repo(test_repo)
 
@@ -1236,7 +1229,7 @@ class TestCLI:
         result = runner.invoke(
             cli,
             [
-                "trace",
+                "affected",
                 "--fix",
                 fix_commit.hexsha,
                 "--target",
@@ -1253,7 +1246,7 @@ class TestCLI:
         assert payload["affected"] is False
         assert payload["details"]["reason"] == "equivalent fixed file state already exists in target ref"
 
-    def test_trace_reports_affected_for_multi_file_fix_with_partial_backport(self, runner, test_repo):
+    def test_affected_reports_affected_for_multi_file_fix_with_partial_backport(self, runner, test_repo):
         """测试多文件修复只回补部分文件时，CLI仍应判定目标版本受影响"""
         git_repo = git.Repo(test_repo)
 
@@ -1284,7 +1277,7 @@ class TestCLI:
         result = runner.invoke(
             cli,
             [
-                "trace",
+                "affected",
                 "--fix",
                 fix_commit.hexsha,
                 "--target",
@@ -1301,7 +1294,7 @@ class TestCLI:
         assert payload["affected"] is True
         assert payload["method"] in ["code_block", "ast_structure", "similarity"]
 
-    def test_trace_reports_not_affected_for_single_file_equivalent_refactor_backport(self, runner, test_repo):
+    def test_affected_reports_not_affected_for_single_file_equivalent_refactor_backport(self, runner, test_repo):
         """测试单文件语义等价但文本不同的回补时，CLI应判定目标版本不再受影响"""
         git_repo = git.Repo(test_repo)
 
@@ -1329,7 +1322,7 @@ class TestCLI:
         result = runner.invoke(
             cli,
             [
-                "trace",
+                "affected",
                 "--fix",
                 fix_commit.hexsha,
                 "--target",
