@@ -34,8 +34,6 @@ class TestCLI:
         """测试trace命令帮助"""
         result = runner.invoke(cli, ["trace", "--help"])
         assert result.exit_code == 0
-        assert "fix_commit" in result.output
-        assert "target" in result.output
         assert "--fix" in result.output
         assert "--target" in result.output
         assert "--targets-file" in result.output
@@ -74,7 +72,7 @@ class TestCLI:
 
     def test_trace_not_found_shows_strategy_summary(self, runner):
         """测试未命中时输出策略摘要"""
-        result = runner.invoke(cli, ["trace", "deadbeef", "master"])
+        result = runner.invoke(cli, ["trace", "--fix", "deadbeef", "--target", "master"])
         assert result.exit_code != 0 or "策略摘要" in result.output or "错误:" in result.output
 
     def test_trace_reports_affected_for_release_branch(self, runner, test_repo):
@@ -95,7 +93,7 @@ class TestCLI:
 
         result = runner.invoke(
             cli,
-            ["trace", fix_commit.hexsha, "release/v1.0", "--repo", str(test_repo)],
+            ["trace", "--fix", fix_commit.hexsha, "--target", "release/v1.0", "--repo", str(test_repo)],
         )
 
         assert result.exit_code == 0
@@ -104,7 +102,7 @@ class TestCLI:
         assert "尝试策略数:" in result.output
 
     def test_trace_accepts_fix_and_target_options(self, runner, test_repo):
-        """测试可使用--fix和--target替代位置参数"""
+        """测试trace使用显式 --fix 和 --target"""
         git_repo = git.Repo(test_repo)
 
         bug_file = test_repo / "bug.py"
@@ -185,7 +183,9 @@ class TestCLI:
             cli,
             [
                 "trace",
+                "--fix",
                 fix_commit.hexsha,
+                "--target",
                 "v1.0.1",
                 "--repo",
                 str(test_repo),
@@ -219,7 +219,7 @@ class TestCLI:
 
         result = runner.invoke(
             cli,
-            ["trace", fix_commit.hexsha, release_commit.hexsha, "--repo", str(test_repo)],
+            ["trace", "--fix", fix_commit.hexsha, "--target", release_commit.hexsha, "--repo", str(test_repo)],
         )
 
         assert result.exit_code == 0
@@ -250,7 +250,9 @@ class TestCLI:
             cli,
             [
                 "trace",
+                "--fix",
                 fix_commit.hexsha,
+                "--target",
                 "release/v1.0",
                 "--repo",
                 str(test_repo),
@@ -1017,7 +1019,7 @@ class TestCLI:
 
         result = runner.invoke(
             cli,
-            ["trace", fix_commit.hexsha, "release/v1.0", "--repo", str(test_repo)],
+            ["trace", "--fix", fix_commit.hexsha, "--target", "release/v1.0", "--repo", str(test_repo)],
         )
 
         assert result.exit_code == 0
@@ -1047,7 +1049,9 @@ class TestCLI:
             cli,
             [
                 "trace",
+                "--fix",
                 fix_commit.hexsha,
+                "--target",
                 "release/v1.0",
                 "--repo",
                 str(test_repo),
@@ -1088,7 +1092,9 @@ class TestCLI:
             cli,
             [
                 "trace",
+                "--fix",
                 fix_commit.hexsha,
+                "--target",
                 "release/v1.0",
                 "--repo",
                 str(test_repo),
@@ -1132,7 +1138,9 @@ class TestCLI:
             cli,
             [
                 "trace",
+                "--fix",
                 fix_commit.hexsha,
+                "--target",
                 "release/v1.0",
                 "--repo",
                 str(test_repo),
@@ -1178,7 +1186,9 @@ class TestCLI:
             cli,
             [
                 "trace",
+                "--fix",
                 fix_commit.hexsha,
+                "--target",
                 "release/v1.0",
                 "--repo",
                 str(test_repo),
@@ -1227,7 +1237,9 @@ class TestCLI:
             cli,
             [
                 "trace",
+                "--fix",
                 fix_commit.hexsha,
+                "--target",
                 "release/v1.0",
                 "--repo",
                 str(test_repo),
@@ -1273,7 +1285,9 @@ class TestCLI:
             cli,
             [
                 "trace",
+                "--fix",
                 fix_commit.hexsha,
+                "--target",
                 "release/v1.0",
                 "--repo",
                 str(test_repo),
@@ -1316,7 +1330,9 @@ class TestCLI:
             cli,
             [
                 "trace",
+                "--fix",
                 fix_commit.hexsha,
+                "--target",
                 "release/v1.0",
                 "--repo",
                 str(test_repo),

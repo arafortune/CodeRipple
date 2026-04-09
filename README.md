@@ -25,26 +25,23 @@ uv sync
 ### 基本用法
 
 ```bash
-# 1. 兼容旧用法：按 fix commit 和目标ref 追溯
-uv run coderipple trace <fix_commit> <target_tag_or_branch>
-
-# 2. 更推荐的显式参数形式
+# 1. 推荐的显式参数形式
 uv run coderipple affected --fix <fix_commit> --target <branch_or_tag_or_commit>
 
-# 3. 先查找候选修复提交
+# 2. 先查找候选修复提交
 uv run coderipple find-fix --message "<message>"
 uv run coderipple find-fix --message "<message>" --path src/foo.py --since-days 30
 
-# 4. 按提交信息搜索修复commit
+# 3. 按提交信息搜索修复commit
 uv run coderipple trace --fix-message "<message>" --target <branch_or_tag_or_commit>
 
-# 5. 列出提交信息命中的候选修复提交
+# 4. 列出提交信息命中的候选修复提交
 uv run coderipple trace --fix-message "<message>" --list-fix-candidates --target <branch_or_tag_or_commit>
 
-# 6. 先诊断fix、target和配置是否都可解析
+# 5. 先诊断fix、target和配置是否都可解析
 uv run coderipple doctor --fix <fix_commit> --target <branch_or_tag_or_commit>
 
-# 7. 批量分析多个目标版本
+# 6. 批量分析多个目标版本
 uv run coderipple affected --fix <fix_commit> --target <ref1> --target <ref2>
 uv run coderipple affected --fix <fix_commit> --targets-file targets.txt
 ```
@@ -69,9 +66,6 @@ uv run coderipple affected --fix abc123 --target v1.0.0
 # 先查找候选修复提交
 uv run coderipple find-fix --message "divide by zero" --target release/v1.0
 uv run coderipple find-fix --message "divide by zero" --path bug.py --since-days 30
-
-# 使用旧位置参数形式
-uv run coderipple trace abc123 v1.0.0
 
 # 按提交信息搜索修复commit
 uv run coderipple trace --fix-message "divide by zero" --target release/v1.0
