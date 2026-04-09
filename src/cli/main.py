@@ -27,20 +27,40 @@ def cli():
     return None
 
 
-def _build_analysis(result) -> dict:
+def _build_analysis(
+    result,
+    resolved_fix: Optional[str] = None,
+    resolved_target: Optional[str] = None,
+    resolved_from_message: Optional[str] = None,
+) -> dict:
     status = _infer_result_status(result)
     attempts = result.details.get("attempts", [])
+    strategies = [_build_strategy_analysis(attempt) for attempt in attempts]
     analysis = {
+        "inputs": {
+            "resolved_fix": resolved_fix,
+            "resolved_target": resolved_target,
+            "fix_message": resolved_from_message,
+        },
         "summary": {
             "status": status,
             "affected": result.found,
             "method": result.method,
             "confidence": result.confidence,
         },
-        "strategies": [],
+        "decision_path": _build_decision_path(strategies, status, result),
+        "final_decision": {
+            "status": status,
+            "reason": _build_final_reason(status, result, strategies),
+            "method": result.method,
+            "commit": result.commit,
+            "confidence": result.confidence,
+        },
+        "strategies": strategies,
     }
-    for attempt in attempts:
-        analysis["strategies"].append(_build_strategy_analysis(attempt))
+    analysis["inputs"] = {
+        key: value for key, value in analysis["inputs"].items() if value is not None
+    }
     return analysis
 
 
@@ -106,6 +126,59 @@ def _infer_result_status(result) -> str:
         ):
             return "not_affected"
     return "unknown"
+
+
+def _build_decision_path(strategies: list[dict], final_status: str, result) -> list[dict]:
+    path = []
+    for index, strategy in enumerate(strategies, start=1):
+        step = {
+            "step": index,
+            "method": strategy["method"],
+            "status": strategy["status"],
+            "summary": strategy["summary"],
+            "confidence": strategy["confidence"],
+            "terminal": False,
+        }
+        if result.method == strategy["method"] and final_status == "affected":
+            step["terminal"] = True
+            step["decision"] = "matched_bug_evidence"
+            path.append(step)
+            break
+        if strategy["status"] == "not_affected":
+            step["terminal"] = True
+            step["decision"] = "confirmed_fix_or_equivalent_fix"
+            path.append(step)
+            break
+        if strategy["status"] == "unknown":
+            step["decision"] = "continue"
+        path.append(step)
+    if not path and final_status == "unknown":
+        path.append(
+            {
+                "step": 1,
+                "method": None,
+                "status": "unknown",
+                "summary": "no strategy produced decisive evidence",
+                "confidence": 0.0,
+                "terminal": True,
+                "decision": "no_decisive_evidence",
+            }
+        )
+    return path
+
+
+def _build_final_reason(status: str, result, strategies: list[dict]) -> str:
+    if status == "affected":
+        for strategy in strategies:
+            if strategy["method"] == result.method:
+                return strategy["summary"]
+        return "matched bug evidence in target history"
+    if status == "not_affected":
+        for strategy in strategies:
+            if strategy["status"] == "not_affected":
+                return strategy["summary"]
+        return result.details.get("reason", "target already contains a fix or equivalent fix")
+    return "all configured strategies ran, but none produced decisive evidence"
 
 
 def _summarize_strategy(method: Optional[str], status: str, evidence: dict) -> str:
@@ -453,16 +526,31 @@ def _render_table(result, explain: bool, resolved_fix: str, resolved_target: str
                 )
 
     if explain:
-        analysis = _build_analysis(result)
+        analysis = _build_analysis(result, resolved_fix, resolved_target, resolved_from_message)
         click.echo("  分析过程:")
-        click.echo(f"    - resolved_fix: {resolved_fix}")
+        click.echo("    - inputs:")
+        click.echo(f"      resolved_fix={resolved_fix}")
         if resolved_from_message:
-            click.echo(f"    - fix_message: {resolved_from_message}")
-        click.echo(f"    - resolved_target: {resolved_target}")
+            click.echo(f"      fix_message={resolved_from_message}")
+        click.echo(f"      resolved_target={resolved_target}")
+        click.echo("    - decision_path:")
+        for step in analysis["decision_path"]:
+            click.echo(
+                f"      step={step['step']}, method={step['method']}, status={step['status']}, decision={step['decision']}, terminal={step['terminal']}"
+            )
+            click.echo(f"        summary={step['summary']}")
+        click.echo("    - final_decision:")
+        click.echo(
+            f"      status={analysis['final_decision']['status']}, method={analysis['final_decision']['method']}, confidence={analysis['final_decision']['confidence']:.2%}"
+        )
+        click.echo(f"      reason={analysis['final_decision']['reason']}")
+        click.echo("    - strategies:")
         for strategy in analysis["strategies"]:
             click.echo(
-                f"    - {strategy['method']}: status={strategy['status']}, confidence={strategy['confidence']:.2%}, summary={strategy['summary']}"
+                f"      {strategy['method']}: status={strategy['status']}, confidence={strategy['confidence']:.2%}, summary={strategy['summary']}"
             )
+            if strategy["evidence"]:
+                click.echo(f"        evidence={json.dumps(strategy['evidence'], ensure_ascii=False, sort_keys=True)}")
 
 
 def _trace_command(
@@ -506,7 +594,7 @@ def _trace_command(
             "details": result.details,
         }
         if explain:
-            entry["analysis"] = _build_analysis(result)
+            entry["analysis"] = _build_analysis(result, resolved_fix, resolved_target, resolved_from_message)
             entry["resolved_fix"] = resolved_fix
             entry["resolved_target"] = resolved_target
             if resolved_from_message:

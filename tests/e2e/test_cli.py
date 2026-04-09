@@ -838,7 +838,11 @@ class TestCLI:
         assert payload["resolved_fix"] == fix_commit.hexsha
         assert payload["resolved_target"] == "release/v1.0"
         assert "analysis" in payload
+        assert payload["analysis"]["inputs"]["resolved_fix"] == fix_commit.hexsha
+        assert payload["analysis"]["inputs"]["resolved_target"] == "release/v1.0"
         assert payload["analysis"]["summary"]["status"] == "unknown"
+        assert payload["analysis"]["decision_path"][0]["method"] == "commit_chain"
+        assert "final_decision" in payload["analysis"]
         assert payload["analysis"]["strategies"][0]["method"] == "commit_chain"
         assert payload["analysis"]["strategies"][0]["status"] == "unknown"
         assert "summary" in payload["analysis"]["strategies"][0]
@@ -877,6 +881,9 @@ class TestCLI:
         assert result.exit_code == 0
         assert "分析过程:" in result.output
         assert "summary=" in result.output
+        assert "decision_path:" in result.output
+        assert "final_decision:" in result.output
+        assert "evidence=" in result.output
 
     def test_trace_table_output_shows_unknown_status(self, runner, test_repo):
         """测试未命中修复且未找到bug证据时table输出显示unknown状态"""
